@@ -1,0 +1,55 @@
+{
+  "polymarket": {
+    "clob_api": "https://clob.polymarket.com",
+    "gamma_api": "https://gamma-api.polymarket.com",
+    "data_api": "https://data-api.polymarket.com",
+    "ws_url": "wss://ws-subscriptions-clob.polymarket.com/ws/market",
+    "chain_id": 137
+  },
+  "trading": {
+    "mode": "live",
+    "max_position_size_usd": 3,
+    "max_daily_loss_usd": 5,
+    "max_open_positions": 3,
+    "default_strategy": "auto",
+    "strategies_enabled": ["straddle", "arbitrage", "market_making"],
+    "strategy_evaluation_interval_minutes": 5
+  },
+  "straddle": {
+    "target_markets": ["BTC", "ETH", "SOL", "XRP"],
+    "market_durations": ["5min"],
+    "max_entry_price": 0.55,
+    "min_entry_price": 0.40,
+    "volatility_threshold": 0.08,
+    "volatility_lookback_seconds": 300,
+    "exit_profit_target": 2.5,
+    "exit_stop_loss": 0.7
+  },
+  "arbitrage": {
+    "min_spread_pct": 0.5,
+    "max_execution_delay_ms": 5000,
+    "min_profit_usd": 0.10
+  },
+  "market_making": {
+    "spread_bps": 200,
+    "order_size_usd": 2,
+    "max_inventory_imbalance": 0.6,
+    "refresh_interval_ms": 10000
+  },
+  "risk": {
+    "max_drawdown_pct": 30,
+    "position_size_pct": 20,
+    "kelly_fraction": 0.15,
+    "cooldown_after_loss_minutes": 2
+  },
+  "analytics": {
+    "top_wallets_count": 50,
+    "min_trades_for_analysis": 20,
+    "lookback_days": 30
+  },
+  "monitoring": {
+    "log_level": "debug",
+    "dashboard_port": 3000,
+    "metrics_interval_seconds": 30
+  }
+}
