@@ -394,6 +394,36 @@ function switchPage(name){
 // SMART MONEY TRACKER
 // ═══════════════════════════════════════════════════════════
 var _smTraders=[];var _smFeed=[];var _smConsensus={};
+var _liveMarketSlugs={};  // cache of live market slugs
+
+// Fetch all currently active/open market slugs to filter out resolved ones
+async function smLoadLiveMarkets(){
+  lg('Loading live market index...');
+  var slugs={};
+  for(var off=0;off<2000;off+=100){
+    try{
+      var r=await fetch(_GAMMA+'/markets?limit=100&active=true&closed=false&offset='+off+'&order=liquidity&ascending=false');
+      var d=await r.json();if(!d||!d.length)break;
+      d.forEach(function(m){
+        var s=m.eventSlug||m.slug||m.conditionId;if(s)slugs[s]=true;
+        if(m.conditionId)slugs[m.conditionId]=true;
+        if(m.slug)slugs[m.slug]=true;
+      });
+    }catch(e){break;}
+  }
+  _liveMarketSlugs=slugs;
+  lg('Indexed '+Object.keys(slugs).length+' live markets','ok');
+}
+
+function isLiveMarket(tr){
+  // Check if any of the trade's market identifiers match a live market
+  var slug=tr.eventSlug||tr.slug||tr.conditionId||'';
+  if(!slug)return false;
+  if(_liveMarketSlugs[slug])return true;
+  if(tr.conditionId&&_liveMarketSlugs[tr.conditionId])return true;
+  if(tr.slug&&_liveMarketSlugs[tr.slug])return true;
+  return false;
+}
 
 async function smLoadLeaderboard(){
   lg('Loading top 100 traders...');
@@ -410,6 +440,7 @@ async function smLoadLeaderboard(){
 
 async function smFetchTrades(){
   if(!_smTraders.length)await smLoadLeaderboard();
+  if(!Object.keys(_liveMarketSlugs).length)await smLoadLiveMarkets();
   lg('Fetching recent whale trades...');
   var filter=$('sm-filter').value;
   var traders=_smTraders.filter(function(t){
@@ -422,10 +453,20 @@ async function smFetchTrades(){
   var batches=[];for(var i=0;i<subset.length;i+=10)batches.push(subset.slice(i,i+10));
   for(var b=0;b<batches.length;b++){
     var proms=batches[b].map(function(t){
-      return fetch(_DATA+'/v1/trades?user='+t.wallet+'&limit=5').then(function(r){return r.json()}).then(function(trades){return trades.map(function(tr){tr._trader=t;return tr;});}).catch(function(){return[];});
+      return fetch(_DATA+'/v1/trades?user='+t.wallet+'&limit=10').then(function(r){return r.json()}).then(function(trades){return trades.map(function(tr){tr._trader=t;return tr;});}).catch(function(){return[];});
     });
     var results=await Promise.all(proms);results.forEach(function(tr){allTrades=allTrades.concat(tr);});
   }
+
+  // ── CRITICAL: Filter to only LIVE markets ──
+  var cutoff=Math.floor(Date.now()/1000)-(7*24*3600); // Last 7 days only
+  allTrades=allTrades.filter(function(tr){
+    // Must be a recent trade
+    if(tr.timestamp&&tr.timestamp<cutoff)return false;
+    // Must be on a live/open market (not resolved)
+    return isLiveMarket(tr);
+  });
+
   allTrades.forEach(function(tr){
     var title=(tr.title||'').toLowerCase();
     if(title.match(/bitcoin|btc|eth|crypto|solana|xrp|updown/))tr._cat='crypto';
@@ -448,7 +489,7 @@ async function smFetchTrades(){
     if(_smConsensus[key].traders.indexOf(tName)===-1)_smConsensus[key].traders.push(tName);
   });
   smRender();
-  lg('Smart money: '+_smFeed.length+' trades, '+Object.keys(_smConsensus).length+' markets','ok');
+  lg('Smart money: '+_smFeed.length+' live trades, '+Object.keys(_smConsensus).length+' active markets','ok');
 }
 
 function smRender(){
@@ -649,6 +690,9 @@ async function arbScan(){
 }
 
 function arbRender(){
+  var sortBy=$('arb-sort').value;
+  if(sortBy==='edge'){_arbOpps.sort(function(a,b){return b.profitPct-a.profitPct});_strOpps.sort(function(a,b){return b.evPct-a.evPct});}
+  else{_arbOpps.sort(function(a,b){return b.liq-a.liq});_strOpps.sort(function(a,b){return b.liq-a.liq});}
   $('arb-scanned').textContent=_arbTotal||'--';$('arb-opps').textContent=_arbOpps.length;
   $('arb-straddles').textContent=_strOpps.length;
   $('arb-best').textContent=_arbOpps.length?fmtPct(_arbOpps[0].profitPct):(_strOpps.length?fmtPct(_strOpps[0].evPct):'--');
