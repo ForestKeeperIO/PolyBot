@@ -246,6 +246,13 @@ select:hover{border-color:var(--accent)}
 // ═══ POLYBOT v5.0 ENGINE ═══
 // Architecture: globals → TA helpers → fmkt → analyze → rmc → render → go → controls
 
+// ── API Base URLs (auto-detect proxy vs direct) ──
+var _onPolymarket=location.hostname.indexOf('polymarket.com')!==-1;
+var _GAMMA=_onPolymarket?'https://gamma-api.polymarket.com':'/api/gamma';
+var _CLOB=_onPolymarket?'https://clob.polymarket.com':'/api/clob';
+var _COINBASE=_onPolymarket?'https://api.coinbase.com':'/api/coinbase';
+var _EXCHANGE=_onPolymarket?'https://api.exchange.coinbase.com':'/api/exchange';
+
 // ── Global State ──
 var _mkts=[],_nextWindows={},_history={},_filter='ALL',_sort='score',_sigOnly=false,_scans=0,_timer=null;
 var _accuracy={wins:0,losses:0,neutral:0,log:[]};
@@ -272,7 +279,7 @@ async function fmkt(){
   assets.forEach(function(a){
     var pred=_lastPredictions[a.toUpperCase()];
     if(pred&&pred.windowTs===prevTs&&pred.dir!=='neutral'){
-      accFetches.push(fetch('https://gamma-api.polymarket.com/events/slug/'+a+'-updown-5m-'+prevTs).then(function(r){return r.ok?r.json():null}).then(function(ev){
+      accFetches.push(fetch(_GAMMA+'/events/slug/'+a+'-updown-5m-'+prevTs).then(function(r){return r.ok?r.json():null}).then(function(ev){
         if(ev&&ev.markets&&ev.markets[0]){var m2=ev.markets[0];var prices=JSON.parse(m2.outcomePrices||'[]');var yp=parseFloat(prices[0]||'0.5');
           var actual=yp>0.8?'up':yp<0.2?'down':'unclear';
           if(actual!=='unclear'){
@@ -290,7 +297,7 @@ async function fmkt(){
   // Fetch current + next window
   [ts,ts+300].forEach(function(t,wi){
     assets.forEach(function(a){
-      fetches.push(fetch('https://gamma-api.polymarket.com/events/slug/'+a+'-updown-5m-'+t).then(function(r){return r.ok?r.json():null}).then(function(ev){
+      fetches.push(fetch(_GAMMA+'/events/slug/'+a+'-updown-5m-'+t).then(function(r){return r.ok?r.json():null}).then(function(ev){
         if(ev&&ev.id&&ev.markets&&ev.markets[0]&&!ev.markets[0].closed){
           var m=ev.markets[0];
           m._asset=a.toUpperCase();m._windowTs=t;m._is5min=true;m._endMs=t*1000;
@@ -307,7 +314,7 @@ async function fmkt(){
   assets.forEach(function(a){
     _history[a.toUpperCase()]=[];
     for(var i=1;i<=8;i++){var pt=ts-(i*300);
-      fetches.push(fetch('https://gamma-api.polymarket.com/events/slug/'+a+'-updown-5m-'+pt).then(function(r){return r.ok?r.json():null}).then(function(ev){
+      fetches.push(fetch(_GAMMA+'/events/slug/'+a+'-updown-5m-'+pt).then(function(r){return r.ok?r.json():null}).then(function(ev){
         if(ev&&ev.markets&&ev.markets[0]){var m2=ev.markets[0];var prices=JSON.parse(m2.outcomePrices||'[]');var yp=parseFloat(prices[0]||'0.5');_history[a.toUpperCase()].push({closed:m2.closed,yesPrice:yp,result:yp>0.9?'UP':yp<0.1?'DOWN':'OPEN'});}
       }).catch(function(){}));
     }
@@ -332,14 +339,14 @@ async function analyze(asset,markets){
 
     // CLOB data fetch
     var r=await Promise.all([
-      fetch('https://clob.polymarket.com/book?token_id='+tids[0]).then(function(x){return x.json()}).catch(function(){return null}),
-      fetch('https://clob.polymarket.com/book?token_id='+tids[1]).then(function(x){return x.json()}).catch(function(){return null}),
-      fetch('https://clob.polymarket.com/price?token_id='+tids[0]+'&side=buy').then(function(x){return x.json()}).catch(function(){return null}),
-      fetch('https://clob.polymarket.com/price?token_id='+tids[1]+'&side=buy').then(function(x){return x.json()}).catch(function(){return null}),
-      fetch('https://clob.polymarket.com/midpoint?token_id='+tids[0]).then(function(x){return x.json()}).catch(function(){return null}),
-      fetch('https://clob.polymarket.com/last-trade-price?token_id='+tids[0]).then(function(x){return x.json()}).catch(function(){return null}),
-      fetch('https://clob.polymarket.com/last-trade-price?token_id='+tids[1]).then(function(x){return x.json()}).catch(function(){return null}),
-      fetch('https://clob.polymarket.com/spread?token_id='+tids[0]).then(function(x){return x.json()}).catch(function(){return null})
+      fetch(''+_CLOB+'/book?token_id='+tids[0]).then(function(x){return x.json()}).catch(function(){return null}),
+      fetch(''+_CLOB+'/book?token_id='+tids[1]).then(function(x){return x.json()}).catch(function(){return null}),
+      fetch(''+_CLOB+'/price?token_id='+tids[0]+'&side=buy').then(function(x){return x.json()}).catch(function(){return null}),
+      fetch(''+_CLOB+'/price?token_id='+tids[1]+'&side=buy').then(function(x){return x.json()}).catch(function(){return null}),
+      fetch(''+_CLOB+'/midpoint?token_id='+tids[0]).then(function(x){return x.json()}).catch(function(){return null}),
+      fetch(''+_CLOB+'/last-trade-price?token_id='+tids[0]).then(function(x){return x.json()}).catch(function(){return null}),
+      fetch(''+_CLOB+'/last-trade-price?token_id='+tids[1]).then(function(x){return x.json()}).catch(function(){return null}),
+      fetch(''+_CLOB+'/spread?token_id='+tids[0]).then(function(x){return x.json()}).catch(function(){return null})
     ]);
     var yBook=r[0],nBook=r[1];
     var yPrice=parseFloat((r[2]&&r[2].price)||'0.5');
@@ -365,7 +372,7 @@ async function analyze(asset,markets){
     // 7. Depth (w3)
     if(yBook&&yBook.bids&&yBook.asks){var bidCt=Math.min(yBook.bids.length,5);var askCt=Math.min(yBook.asks.length,5);if(bidCt>=3&&askCt>=3){var wBid=0,wAsk=0;var weights=[3,2.5,2,1.5,1];for(var i=0;i<bidCt;i++)wBid+=parseFloat(yBook.bids[i].size)*weights[i];for(var j=0;j<askCt;j++)wAsk+=parseFloat(yBook.asks[j].size)*weights[j];var wTotal=wBid+wAsk;if(wTotal>0){var wRatio=wBid/wTotal;if(Math.abs(wRatio-0.5)>0.04)sigs.push({src:'Depth',cat:'clob',dir:wRatio>0.5?'up':'down',str:Math.min(Math.abs(wRatio-0.5)*220,80),w:3,reason:(wRatio*100).toFixed(0)+'% w.bid'});}}}
     // 8. Cross-window Momentum (w5)
-    if(markets.length>=2){var t3=JSON.parse(markets[1].clobTokenIds||'[]');if(t3[0]){try{var p2=await fetch('https://clob.polymarket.com/price?token_id='+t3[0]+'&side=buy').then(function(x){return x.json()});var ny=parseFloat((p2&&p2.price)||'0.5');var mom=yPrice-ny;if(Math.abs(mom)>0.002)sigs.push({src:'Momen',cat:'clob',dir:mom>0?'up':'down',str:Math.min(Math.abs(mom)*450,85),w:5,reason:(mom>0?'+':'')+(mom*100).toFixed(1)+'\u00A2 vs next'});}catch(e){}}}
+    if(markets.length>=2){var t3=JSON.parse(markets[1].clobTokenIds||'[]');if(t3[0]){try{var p2=await fetch(''+_CLOB+'/price?token_id='+t3[0]+'&side=buy').then(function(x){return x.json()});var ny=parseFloat((p2&&p2.price)||'0.5');var mom=yPrice-ny;if(Math.abs(mom)>0.002)sigs.push({src:'Momen',cat:'clob',dir:mom>0?'up':'down',str:Math.min(Math.abs(mom)*450,85),w:5,reason:(mom>0?'+':'')+(mom*100).toFixed(1)+'\u00A2 vs next'});}catch(e){}}}
     // 9. Streak (w4)
     var hist=_history[asset]||[];var resolved=hist.filter(function(h){return h.result==='UP'||h.result==='DOWN'});
     if(resolved.length>=3){var ups=resolved.filter(function(h){return h.result==='UP'}).length;var downs=resolved.length-ups;var streakDir=ups>downs?'up':'down';var ratio=Math.max(ups,downs)/resolved.length;if(ratio>0.6)sigs.push({src:'Streak',cat:'clob',dir:streakDir,str:Math.min(ratio*85,80),w:4,reason:ups+'W/'+downs+'L'});}
@@ -381,8 +388,8 @@ async function analyze(asset,markets){
     var tokenPrice=null,candles=null;
     try{
       var [spotR,candleR]=await Promise.all([
-        fetch('https://api.coinbase.com/v2/prices/'+cbPair+'/spot').then(function(x){return x.json()}).catch(function(){return null}),
-        fetch('https://api.exchange.coinbase.com/products/'+cbPair+'/candles?granularity=300').then(function(x){return x.json()}).catch(function(){return null})
+        fetch(''+_COINBASE+'/v2/prices/'+cbPair+'/spot').then(function(x){return x.json()}).catch(function(){return null}),
+        fetch(''+_EXCHANGE+'/products/'+cbPair+'/candles?granularity=300').then(function(x){return x.json()}).catch(function(){return null})
       ]);
       if(spotR&&spotR.data)tokenPrice=parseFloat(spotR.data.amount);
       if(candleR&&Array.isArray(candleR))candles=candleR.slice(0,40);
@@ -572,7 +579,8 @@ document.getElementById('ref-sel').addEventListener('change',function(){stmr()})
 document.getElementById('rbtn').addEventListener('click',function(){go()});
 document.getElementById('sig-only').addEventListener('change',function(e){_sigOnly=e.target.checked;render(_mkts);});
 
-lg('PolyBot v5.0 — 23 Signals | CLOB + Token Price + Technical Analysis');
+lg('PolyBot v5.0 \u2014 23 Signals | CLOB + Token Price + Technical Analysis');
+lg(_onPolymarket?'Mode: Direct (polymarket.com)':'Mode: Proxy ('+location.hostname+')');
 go();stmr();
 </script>
 </body>
