@@ -274,9 +274,9 @@ select:focus,.input:focus{border-color:var(--blue);outline:none}
       </div>
       <div class="controls">
         <button class="btn btn-primary" id="wx-refresh" onclick="wxScan()">&#x1f50d; Scan Markets</button>
-        <input type="text" class="input" id="wx-apikey" value="328393c14f3545a38c144740261403" placeholder="WeatherAPI.com key (optional)">
+        <input type="text" class="input" id="wx-apikey" value="" placeholder="Not needed \u2014 using Open-Meteo satellite data" disabled style="opacity:0.5">
         <select id="wx-threshold" onchange="wxRender()"><option value="8">Min 8% edge</option><option value="5">Min 5% edge</option><option value="10">Min 10% edge</option><option value="15">Min 15% edge</option></select>
-        <select id="wx-sort" onchange="wxRender()"><option value="edge">Sort: Highest Edge</option><option value="liquidity">Sort: Liquidity</option><option value="price">Sort: Cheapest YES</option><option value="date">Sort: Soonest Date</option></select>
+        <select id="wx-sort" onchange="wxRender()"><option value="edge">Sort: Highest Edge</option><option value="score">Sort: Signal Score</option><option value="liquidity">Sort: Liquidity</option><option value="price">Sort: Cheapest YES</option><option value="date">Sort: Soonest Date</option></select>
       </div>
       <div class="section-header"><div class="section-title">Weather Market Opportunities<span class="section-count" id="wx-count">0</span></div></div>
       <div class="card-grid" id="wx-grid"><div class="empty"><div class="empty-icon">&#x1f326;</div>Click "Scan Markets" to find weather opportunities</div></div>
@@ -596,27 +596,201 @@ async function wxScan(){
     // Extract correct event slug from Gamma API events array
     m._eventSlug=(m.events&&m.events[0])?m.events[0].slug:(m.eventSlug||m.slug||'');
   });
-  var apiKey=$('wx-apikey').value.trim();
-  if(apiKey){
-    lg('Fetching weather forecasts...');
-    var proms=_wxMarkets.map(function(m){
-      var p=m._parsed;if(!p.city||!p.date)return Promise.resolve();
-      return fetch('https://api.weatherapi.com/v1/forecast.json?key='+apiKey+'&q='+encodeURIComponent(p.city)+'&dt='+p.date+'&aqi=no')
-        .then(function(r){return r.json()}).then(function(data){
-          if(data&&data.forecast&&data.forecast.forecastday&&data.forecast.forecastday[0]){
-            var day=data.forecast.forecastday[0].day;
-            m._forecast={maxC:day.maxtemp_c,maxF:day.maxtemp_f,minC:day.mintemp_c,minF:day.mintemp_f,avgC:day.avgtemp_c,avgF:day.avgtemp_f,condition:day.condition?day.condition.text:'',rain:day.daily_chance_of_rain};
-            var forecastVal=p.unit==='F'?day.maxtemp_f:day.maxtemp_c;var stdDev=p.unit==='F'?4:2.2;
-            if(p.op==='>='){ var z=(forecastVal-p.threshold)/stdDev;m._impliedProb=0.5*(1+erf(z/Math.sqrt(2)));}
-            else if(p.op==='<='){ var z=(p.threshold-forecastVal)/stdDev;m._impliedProb=0.5*(1+erf(z/Math.sqrt(2)));}
-            else if(p.op==='between'&&Array.isArray(p.threshold)){var zL=(p.threshold[0]-forecastVal)/stdDev;var zH=(p.threshold[1]-forecastVal)/stdDev;m._impliedProb=0.5*(erf(zH/Math.sqrt(2))-erf(zL/Math.sqrt(2)));}
-            if(m._impliedProb!==undefined)m._edge=(m._impliedProb-m._yesPrice)*100;
-          }
-        }).catch(function(){});
-    });
-    await Promise.all(proms);
-  }else{_wxMarkets.forEach(function(m){m._edge=null;m._forecast=null;});}
-  wxRender();lg('Found '+_wxMarkets.length+' weather markets','ok');
+  // ── City coords for geocoding ──
+  var _wxCityCoords={
+    'New York':{lat:40.71,lon:-74.01},'Los Angeles':{lat:34.05,lon:-118.24},'Chicago':{lat:41.88,lon:-87.63},
+    'Houston':{lat:29.76,lon:-95.37},'Phoenix':{lat:33.45,lon:-112.07},'Philadelphia':{lat:39.95,lon:-75.17},
+    'San Antonio':{lat:29.42,lon:-98.49},'San Diego':{lat:32.72,lon:-117.16},'Dallas':{lat:32.78,lon:-96.80},
+    'Miami':{lat:25.76,lon:-80.19},'Atlanta':{lat:33.75,lon:-84.39},'Boston':{lat:42.36,lon:-71.06},
+    'Seattle':{lat:47.61,lon:-122.33},'Denver':{lat:39.74,lon:-104.99},'Nashville':{lat:36.16,lon:-86.78},
+    'Washington':{lat:38.91,lon:-77.04},'Las Vegas':{lat:36.17,lon:-115.14},'Portland':{lat:45.52,lon:-122.68},
+    'Minneapolis':{lat:44.98,lon:-93.27},'Detroit':{lat:42.33,lon:-83.05},'Austin':{lat:30.27,lon:-97.74},
+    'San Francisco':{lat:37.77,lon:-122.42},'Tampa':{lat:27.95,lon:-82.46},'Orlando':{lat:28.54,lon:-81.38},
+    'Charlotte':{lat:35.23,lon:-80.84},'Indianapolis':{lat:39.77,lon:-86.16},'Columbus':{lat:39.96,lon:-82.99},
+    'Memphis':{lat:35.15,lon:-90.05},'Baltimore':{lat:39.29,lon:-76.61},'Milwaukee':{lat:43.04,lon:-87.91},
+    'Anchorage':{lat:61.22,lon:-149.90},'Honolulu':{lat:21.31,lon:-157.86},'Salt Lake City':{lat:40.76,lon:-111.89},
+    'Kansas City':{lat:39.10,lon:-94.58},'Sacramento':{lat:38.58,lon:-121.49},'St. Louis':{lat:38.63,lon:-90.20},
+    'Cleveland':{lat:41.50,lon:-81.69},'Pittsburgh':{lat:40.44,lon:-79.99},'Cincinnati':{lat:39.10,lon:-84.51},
+    'Raleigh':{lat:35.78,lon:-78.64},'New Orleans':{lat:29.95,lon:-90.07},'Louisville':{lat:38.25,lon:-85.76},
+    'Oklahoma City':{lat:35.47,lon:-97.52},'Richmond':{lat:37.54,lon:-77.44},'Buffalo':{lat:42.89,lon:-78.88},
+    'London':{lat:51.51,lon:-0.13},'Paris':{lat:48.86,lon:2.35},'Tokyo':{lat:35.68,lon:139.69},
+    'Sydney':{lat:-33.87,lon:151.21},'Toronto':{lat:43.65,lon:-79.38},'Vancouver':{lat:49.28,lon:-123.12}
+  };
+
+  // ── Resolve coordinates for all markets ──
+  lg('Geocoding cities...');
+  var geoProms=_wxMarkets.map(function(m){
+    var p=m._parsed;if(!p.city)return Promise.resolve();
+    var coords=null;
+    Object.keys(_wxCityCoords).forEach(function(c){if(p.city.toLowerCase().indexOf(c.toLowerCase())!==-1)coords=_wxCityCoords[c];});
+    if(coords){m._coords=coords;return Promise.resolve();}
+    return fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(p.city)+'&count=1')
+      .then(function(r){return r.json()}).then(function(geo){
+        if(geo&&geo.results&&geo.results[0])m._coords={lat:geo.results[0].latitude,lon:geo.results[0].longitude};
+      }).catch(function(){});
+  });
+  await Promise.all(geoProms);
+
+  // ── Fetch satellite + atmospheric data from Open-Meteo (always, free, no key) ──
+  lg('Fetching satellite & atmospheric data (Open-Meteo)...');
+  var satProms=_wxMarkets.map(function(m){
+    var p=m._parsed;if(!m._coords||!p.date)return Promise.resolve();
+    var tu=p.unit==='F'?'fahrenheit':'celsius';
+    return fetch('https://api.open-meteo.com/v1/forecast?latitude='+m._coords.lat+'&longitude='+m._coords.lon+
+      '&daily=temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,shortwave_radiation_sum,uv_index_max,et0_fao_evapotranspiration,weathercode,sunshine_duration'+
+      '&temperature_unit='+tu+'&timezone=auto&start_date='+p.date+'&end_date='+p.date)
+      .then(function(r){return r.json()}).then(function(data){
+        if(!data||!data.daily||data.daily.temperature_2m_max[0]===null)return;
+        var d=data.daily;
+        var maxT=d.temperature_2m_max[0],minT=d.temperature_2m_min[0],avgT=(maxT+minT)/2;
+        var rain=d.precipitation_probability_max?d.precipitation_probability_max[0]:null;
+        var wcode=d.weathercode?d.weathercode[0]:null;
+        var cond=wcode!==null?wxCodeToText(wcode):'';
+        if(p.unit==='F'){m._forecast={maxF:maxT,minF:minT,avgF:avgT,maxC:(maxT-32)*5/9,minC:(minT-32)*5/9,avgC:(avgT-32)*5/9,condition:cond,rain:rain,src:'Open-Meteo Satellite'};}
+        else{m._forecast={maxC:maxT,minC:minT,avgC:avgT,maxF:maxT*9/5+32,minF:minT*9/5+32,avgF:avgT*9/5+32,condition:cond,rain:rain,src:'Open-Meteo Satellite'};}
+        // Satellite-derived atmospheric data
+        m._sat={
+          apparentMax:d.apparent_temperature_max?d.apparent_temperature_max[0]:null,
+          apparentMin:d.apparent_temperature_min?d.apparent_temperature_min[0]:null,
+          precipMm:d.precipitation_sum?d.precipitation_sum[0]:null,
+          windMax:d.wind_speed_10m_max?d.wind_speed_10m_max[0]:null,
+          gustMax:d.wind_gusts_10m_max?d.wind_gusts_10m_max[0]:null,
+          windDir:d.wind_direction_10m_dominant?d.wind_direction_10m_dominant[0]:null,
+          solarRad:d.shortwave_radiation_sum?d.shortwave_radiation_sum[0]:null,
+          uvIndex:d.uv_index_max?d.uv_index_max[0]:null,
+          evapotransp:d.et0_fao_evapotranspiration?d.et0_fao_evapotranspiration[0]:null,
+          sunshineSec:d.sunshine_duration?d.sunshine_duration[0]:null
+        };
+        m._sat.sunshineHrs=m._sat.sunshineSec?Math.round(m._sat.sunshineSec/3600*10)/10:null;
+        wxCalcEdge(m);
+      }).catch(function(e){lg('Open-Meteo err: '+e.message,'err');});
+  });
+  await Promise.all(satProms);
+
+  // ── Fetch historical climate normals (5-yr avg for same date) ──
+  lg('Fetching climate normals...');
+  var histProms=_wxMarkets.map(function(m){
+    var p=m._parsed;if(!m._coords||!p.date)return Promise.resolve();
+    var tu=p.unit==='F'?'fahrenheit':'celsius';
+    // Get same date across 5 previous years
+    var yr=parseInt(p.date.slice(0,4));var md=p.date.slice(4); // -MM-DD
+    var startYr=yr-5;
+    return fetch('https://archive-api.open-meteo.com/v1/archive?latitude='+m._coords.lat+'&longitude='+m._coords.lon+
+      '&start_date='+startYr+md+'&end_date='+(yr-1)+md+'&daily=temperature_2m_max,temperature_2m_min&temperature_unit='+tu+'&timezone=auto')
+      .then(function(r){return r.json()}).then(function(data){
+        if(!data||!data.daily)return;
+        var maxTemps=data.daily.temperature_2m_max.filter(function(t){return t!==null});
+        var minTemps=data.daily.temperature_2m_min.filter(function(t){return t!==null});
+        if(maxTemps.length){
+          var avgHigh=maxTemps.reduce(function(a,b){return a+b},0)/maxTemps.length;
+          var avgLow=minTemps.reduce(function(a,b){return a+b},0)/minTemps.length;
+          var maxHigh=Math.max.apply(null,maxTemps);var minHigh=Math.min.apply(null,maxTemps);
+          m._climate={avgHigh:Math.round(avgHigh*10)/10,avgLow:Math.round(avgLow*10)/10,maxHigh:maxHigh,minHigh:minHigh,years:maxTemps.length,spread:Math.round((maxHigh-minHigh)*10)/10};
+        }
+      }).catch(function(){});
+  });
+  await Promise.all(histProms);
+
+  // ── NOAA weather alerts (US cities only, free) ──
+  lg('Checking NOAA alerts...');
+  var alertProms=_wxMarkets.map(function(m){
+    if(!m._coords)return Promise.resolve();
+    // NOAA only covers US coords roughly
+    if(m._coords.lat<24||m._coords.lat>72||m._coords.lon<-180||m._coords.lon>-60)return Promise.resolve();
+    return fetch('https://api.weather.gov/alerts/active?point='+m._coords.lat.toFixed(4)+','+m._coords.lon.toFixed(4),{headers:{'User-Agent':'PolyBot/1.0'}})
+      .then(function(r){return r.json()}).then(function(data){
+        if(data&&data.features&&data.features.length){
+          m._alerts=data.features.map(function(f){return{event:f.properties.event||'Alert',severity:f.properties.severity||'Unknown',headline:(f.properties.headline||'').slice(0,100)};});
+        }
+      }).catch(function(){});
+  });
+  await Promise.all(alertProms);
+
+  // ── Build 10 signals per market ──
+  _wxMarkets.forEach(function(m){
+    var sigs=[];var score=0;var p=m._parsed;
+    // S1: Price Dislocation — YES+NO far from $1.00
+    var spread=m._yesPrice+m._noPrice;var disloc=Math.abs(1.0-spread);
+    if(disloc>0.03){sigs.push({name:'Price Disloc',val:fmtPct(disloc*100),cls:disloc>0.05?'up':'warn'});score+=disloc>0.05?15:8;}
+    // S2: Extreme Price
+    if(m._yesPrice<0.20){sigs.push({name:'YES Cheap',val:'$'+m._yesPrice.toFixed(2),cls:'up'});score+=12;}
+    else if(m._yesPrice>0.85){sigs.push({name:'YES Costly',val:'$'+m._yesPrice.toFixed(2),cls:'dn'});score+=10;}
+    if(m._noPrice<0.20){sigs.push({name:'NO Cheap',val:'$'+m._noPrice.toFixed(2),cls:'up'});score+=12;}
+    // S3: Liquidity
+    if(m._liq<500){sigs.push({name:'Thin Liq',val:fmtUSD(m._liq),cls:'warn'});score+=5;}
+    else if(m._liq>10000){sigs.push({name:'Deep Liq',val:fmtUSD(m._liq),cls:'up'});score+=8;}
+    // S4: Time Decay
+    if(p.date){
+      var eventDate=new Date(p.date+'T12:00:00');var daysOut=Math.max(0,Math.round((eventDate-Date.now())/(86400000)));
+      m._daysOut=daysOut;
+      if(daysOut<=2){sigs.push({name:'Imminent',val:daysOut+'d',cls:'up'});score+=15;}
+      else if(daysOut<=5){sigs.push({name:'Soon',val:daysOut+'d',cls:'warn'});score+=8;}
+      else{sigs.push({name:'Far Out',val:daysOut+'d',cls:'dn'});score+=2;}
+    }
+    // S5: Market Confidence
+    var confidence=Math.abs(m._yesPrice-0.5)*200;
+    if(confidence>60){sigs.push({name:'High Conv',val:Math.round(confidence)+'%',cls:'up'});score+=10;}
+    else if(confidence<20){sigs.push({name:'Uncertain',val:Math.round(confidence)+'%',cls:'warn'});score+=6;}
+    // S6: Solar Radiation (satellite-derived) — high radiation = warmer temps
+    if(m._sat&&m._sat.solarRad!==null){
+      if(m._sat.solarRad>20){sigs.push({name:'\u2600 Hi Solar',val:m._sat.solarRad.toFixed(1)+' MJ/m\u00b2',cls:'up'});score+=8;}
+      else if(m._sat.solarRad<8){sigs.push({name:'\u2601 Lo Solar',val:m._sat.solarRad.toFixed(1)+' MJ/m\u00b2',cls:'dn'});score+=6;}
+    }
+    // S7: Wind Chill / Apparent Temp Delta — actual vs feels-like divergence
+    if(m._sat&&m._sat.apparentMax!==null&&m._forecast){
+      var forecastHigh=p.unit==='F'?m._forecast.maxF:m._forecast.maxC;
+      var delta=Math.abs(m._sat.apparentMax-forecastHigh);
+      if(delta>8){sigs.push({name:'Feels-Like \u0394',val:(delta>0?'+':'')+delta.toFixed(0)+'\u00b0',cls:'warn'});score+=10;}
+      else if(delta>4){sigs.push({name:'Wind Chill',val:'\u0394'+delta.toFixed(0)+'\u00b0',cls:'blue'});score+=5;}
+    }
+    // S8: Climate Normal Deviation — forecast vs historical avg
+    if(m._climate&&m._forecast){
+      var fHigh=p.unit==='F'?m._forecast.maxF:m._forecast.maxC;
+      var normDev=fHigh-m._climate.avgHigh;
+      if(Math.abs(normDev)>5){
+        sigs.push({name:normDev>0?'Above Norm':'Below Norm',val:(normDev>0?'+':'')+normDev.toFixed(1)+'\u00b0',cls:normDev>0?'up':'dn'});
+        score+=12;
+      }else if(Math.abs(normDev)>2){
+        sigs.push({name:'Near Norm',val:'\u0394'+normDev.toFixed(1)+'\u00b0',cls:'blue'});score+=4;
+      }
+      // Historical volatility — if temps swing a lot on this date historically
+      if(m._climate.spread>15){sigs.push({name:'Volatile Date',val:m._climate.spread+'\u00b0 range',cls:'warn'});score+=8;}
+    }
+    // S9: NOAA Weather Alerts
+    if(m._alerts&&m._alerts.length){
+      var sev=m._alerts[0].severity;var sevCls=sev==='Extreme'||sev==='Severe'?'dn':sev==='Moderate'?'warn':'blue';
+      sigs.push({name:'\u26a0 '+m._alerts[0].event.slice(0,18),val:sev,cls:sevCls});score+=sev==='Extreme'?20:sev==='Severe'?15:8;
+    }
+    // S10: Precipitation + UV combo signal
+    if(m._sat){
+      if(m._sat.precipMm!==null&&m._sat.precipMm>5){sigs.push({name:'\u{1f327} Precip',val:m._sat.precipMm.toFixed(1)+'mm',cls:'dn'});score+=6;}
+      if(m._sat.uvIndex!==null&&m._sat.uvIndex>=8){sigs.push({name:'\u2600 Hi UV',val:m._sat.uvIndex.toFixed(0)+' idx',cls:'warn'});score+=5;}
+      if(m._sat.gustMax!==null&&m._sat.gustMax>50){sigs.push({name:'\u{1f4a8} Gusts',val:Math.round(m._sat.gustMax)+'km/h',cls:'dn'});score+=8;}
+      if(m._sat.sunshineHrs!==null){
+        if(m._sat.sunshineHrs>10){sigs.push({name:'\u2600 Sunny',val:m._sat.sunshineHrs+'h',cls:'up'});score+=5;}
+        else if(m._sat.sunshineHrs<3){sigs.push({name:'\u2601 Overcast',val:m._sat.sunshineHrs+'h sun',cls:'dn'});score+=5;}
+      }
+    }
+    m._signals=sigs;m._sigScore=score;
+  });
+
+  wxRender();lg('Found '+_wxMarkets.length+' weather markets with satellite data','ok');
+}
+
+function wxCodeToText(c){
+  if(c===0)return'Clear sky';if(c<=3)return'Partly cloudy';if(c<=48)return'Fog';
+  if(c<=57)return'Drizzle';if(c<=67)return'Rain';if(c<=77)return'Snow';
+  if(c<=82)return'Rain showers';if(c<=86)return'Snow showers';if(c>=95)return'Thunderstorm';
+  return'Mixed';
+}
+
+function wxCalcEdge(m){
+  var p=m._parsed;if(!m._forecast)return;
+  var forecastVal=p.unit==='F'?m._forecast.maxF:m._forecast.maxC;var stdDev=p.unit==='F'?4:2.2;
+  if(p.op==='>='){ var z=(forecastVal-p.threshold)/stdDev;m._impliedProb=0.5*(1+erf(z/Math.sqrt(2)));}
+  else if(p.op==='<='){ var z=(p.threshold-forecastVal)/stdDev;m._impliedProb=0.5*(1+erf(z/Math.sqrt(2)));}
+  else if(p.op==='between'&&Array.isArray(p.threshold)){var zL=(p.threshold[0]-forecastVal)/stdDev;var zH=(p.threshold[1]-forecastVal)/stdDev;m._impliedProb=0.5*(erf(zH/Math.sqrt(2))-erf(zL/Math.sqrt(2)));}
+  if(m._impliedProb!==undefined)m._edge=(m._impliedProb-m._yesPrice)*100;
 }
 
 function wxRender(){
@@ -631,6 +805,7 @@ function wxRender(){
   var wxSort=$('wx-sort').value;
   var sorted=_wxMarkets.slice();
   if(wxSort==='edge')sorted.sort(function(a,b){return(b._edge||0)-(a._edge||0)});
+  else if(wxSort==='score')sorted.sort(function(a,b){return(b._sigScore||0)-(a._sigScore||0)});
   else if(wxSort==='liquidity')sorted.sort(function(a,b){return(b._liq||0)-(a._liq||0)});
   else if(wxSort==='price')sorted.sort(function(a,b){return(a._yesPrice||1)-(b._yesPrice||1)});
   else if(wxSort==='date')sorted.sort(function(a,b){return(a._parsed.date||'z').localeCompare(b._parsed.date||'z')});
@@ -646,20 +821,50 @@ function wxRender(){
       '<div class="card-row"><span class="label">Target</span><span class="val">'+(Array.isArray(p.threshold)?p.threshold[0]+'-'+p.threshold[1]:p.threshold)+'\u00b0'+(p.unit||'?')+' '+(p.op||'')+'</span></div>'+
       '<div class="card-row"><span class="label">Date</span><span class="val">'+(p.date||'?')+'</span></div>'+
       '<div class="card-row"><span class="label">Liquidity</span><span class="val blue">'+fmtUSD(m._liq)+'</span></div>';
+    // NOAA alerts banner
+    if(m._alerts&&m._alerts.length){
+      html+='<div style="margin:6px 0;padding:6px 10px;background:var(--dn-bg);border:1px solid var(--dn-border);border-radius:var(--radius-xs);font-size:11px;color:var(--dn)">';
+      m._alerts.forEach(function(a){html+='\u26a0\ufe0f <strong>'+a.event+'</strong> ('+a.severity+') '+a.headline.slice(0,60)+'<br>';});
+      html+='</div>';
+    }
+    // Market + satellite signals
+    if(m._signals&&m._signals.length){
+      html+='<div class="card-divider"></div><div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">';
+      m._signals.forEach(function(s){html+='<span class="chip '+s.cls+'" style="font-size:9px">'+s.name+': '+s.val+'</span>';});
+      html+='</div>';
+    }
+    // Forecast + satellite atmospheric data
     if(m._forecast){
       html+='<div class="card-divider"></div>'+
         '<div class="forecast-box">'+
-        '<div class="card-row"><span class="label">Forecast High</span><span class="val purple">'+(p.unit==='F'?m._forecast.maxF+'\u00b0F':m._forecast.maxC+'\u00b0C')+'</span></div>'+
-        '<div class="card-row"><span class="label">Condition</span><span class="val">'+m._forecast.condition+'</span></div>'+
+        '<div class="card-row"><span class="label">Forecast High <span style="color:var(--t4);font-size:9px">('+(m._forecast.src||'API')+')</span></span><span class="val purple">'+(p.unit==='F'?m._forecast.maxF+'\u00b0F':m._forecast.maxC+'\u00b0C')+'</span></div>'+
+        '<div class="card-row"><span class="label">Forecast Low</span><span class="val blue">'+(p.unit==='F'?m._forecast.minF+'\u00b0F':m._forecast.minC+'\u00b0C')+'</span></div>'+
+        '<div class="card-row"><span class="label">Condition</span><span class="val">'+m._forecast.condition+'</span></div>';
+      // Satellite atmospheric data
+      if(m._sat){
+        if(m._sat.apparentMax!==null)html+='<div class="card-row"><span class="label">Feels Like</span><span class="val">'+(m._sat.apparentMax!==null?Math.round(m._sat.apparentMax)+'\u00b0':'--')+' / '+(m._sat.apparentMin!==null?Math.round(m._sat.apparentMin)+'\u00b0':'--')+'</span></div>';
+        if(m._sat.windMax!==null)html+='<div class="card-row"><span class="label">Wind / Gusts</span><span class="val">'+Math.round(m._sat.windMax)+' / '+(m._sat.gustMax?Math.round(m._sat.gustMax):'-')+' km/h</span></div>';
+        if(m._sat.solarRad!==null)html+='<div class="card-row"><span class="label">\u2600 Solar Rad</span><span class="val">'+m._sat.solarRad.toFixed(1)+' MJ/m\u00b2</span></div>';
+        if(m._sat.sunshineHrs!==null)html+='<div class="card-row"><span class="label">Sunshine</span><span class="val">'+m._sat.sunshineHrs+'h</span></div>';
+        if(m._sat.uvIndex!==null)html+='<div class="card-row"><span class="label">UV Index</span><span class="val">'+(m._sat.uvIndex>=8?'<span style="color:var(--dn)">':m._sat.uvIndex>=5?'<span style="color:var(--warn)">':'<span>')+m._sat.uvIndex.toFixed(1)+'</span></span></div>';
+        if(m._forecast.rain!==null)html+='<div class="card-row"><span class="label">\u{1f327} Rain Prob</span><span class="val">'+(m._forecast.rain>50?'<span style="color:var(--dn)">':m._forecast.rain>20?'<span style="color:var(--warn)">':'<span>')+m._forecast.rain+'%</span></span></div>';
+      }
+      // Climate normal comparison
+      if(m._climate){
+        html+='<div class="card-divider"></div>'+
+          '<div class="card-row"><span class="label">\u{1f4ca} '+m._climate.years+'yr Avg High</span><span class="val">'+m._climate.avgHigh+'\u00b0</span></div>'+
+          '<div class="card-row"><span class="label">Historic Range</span><span class="val">'+m._climate.minHigh+'\u00b0 \u2013 '+m._climate.maxHigh+'\u00b0</span></div>';
+      }
+      html+='<div class="card-divider"></div>'+
         '<div class="card-row"><span class="label">Implied Prob</span><span class="val purple">'+(m._impliedProb!==undefined?(m._impliedProb*100).toFixed(1)+'%':'--')+'</span></div>'+
         '<div class="card-row"><span class="label">Edge</span><span class="val '+edgeCls+'">'+(m._edge!==null?fmtPct(m._edge):'--')+'</span></div>'+
         '<div class="edge-meter"><div class="edge-fill" style="width:'+Math.min(Math.abs(m._edge||0)*3,100)+'%;background:var(--'+(m._edge>0?'up':'dn')+')"></div></div>'+
         '</div>';
     }else{
-      html+='<div style="margin-top:8px;padding:8px 10px;background:var(--bg1);border-radius:var(--radius-xs);font-size:11px;color:var(--t4)">Add WeatherAPI.com key to see forecast & edge</div>';
+      html+='<div style="margin-top:8px;padding:8px 10px;background:var(--bg1);border-radius:var(--radius-xs);font-size:11px;color:var(--t4)">No forecast data \u2014 signals above are market-based</div>';
     }
     // Clear signal recommendation
-    var sigLabel='ADD API KEY FOR SIGNAL',sigCls='neutral';
+    var sigLabel='',sigCls='neutral';
     if(m._edge!==null){
       if(m._edge>8){sigLabel='\u2705 BUY YES \u2014 '+fmtPct(m._edge)+' edge vs market';sigCls='up';}
       else if(m._edge<-8){sigLabel='\u2705 BUY NO \u2014 '+fmtPct(-m._edge)+' edge vs market';sigCls='dn';}
@@ -667,8 +872,15 @@ function wxRender(){
       else if(m._edge<-3){sigLabel='\u{1f7e1} LEAN NO \u2014 small '+fmtPct(-m._edge)+' edge';sigCls='neutral';}
       else{sigLabel='\u26aa NO EDGE \u2014 fairly priced';sigCls='neutral';}
     }else{
-      if(m._yesPrice<0.35){sigLabel='\u{1f535} YES looks cheap ($'+m._yesPrice.toFixed(2)+') \u2014 confirm with forecast';sigCls='neutral';}
-      else if(m._noPrice<0.35){sigLabel='\u{1f535} NO looks cheap ($'+m._noPrice.toFixed(2)+') \u2014 confirm with forecast';sigCls='neutral';}
+      // Use market-based signals when no forecast
+      var ss=m._sigScore||0;
+      if(m._yesPrice<0.20&&m._daysOut!==undefined&&m._daysOut<=3){sigLabel='\u2705 BUY YES \u2014 cheap ($'+m._yesPrice.toFixed(2)+') + imminent';sigCls='up';}
+      else if(m._noPrice<0.20&&m._daysOut!==undefined&&m._daysOut<=3){sigLabel='\u2705 BUY NO \u2014 cheap ($'+m._noPrice.toFixed(2)+') + imminent';sigCls='dn';}
+      else if(m._yesPrice<0.30){sigLabel='\u{1f535} YES looks cheap ($'+m._yesPrice.toFixed(2)+') \u2014 '+m._signals.length+' signals';sigCls='neutral';}
+      else if(m._noPrice<0.30){sigLabel='\u{1f535} NO looks cheap ($'+m._noPrice.toFixed(2)+') \u2014 '+m._signals.length+' signals';sigCls='neutral';}
+      else if(ss>=25){sigLabel='\u{1f7e2} OPPORTUNITY \u2014 '+(m._signals||[]).length+' signals, score '+ss;sigCls='up';}
+      else if(ss>=15){sigLabel='\u{1f7e1} WATCH \u2014 '+(m._signals||[]).length+' signals, score '+ss;sigCls='neutral';}
+      else{sigLabel='\u26aa '+(m._signals||[]).length+' signals \u2014 score '+ss;sigCls='neutral';}
     }
     html+='</div><div class="card-signal"><span class="signal-dir '+sigCls+'">'+sigLabel+'</span></div></div>';
   });
