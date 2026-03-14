@@ -1,10 +1,1113 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta http-equiv="refresh" content="0;url=dashboard-v6.html">
-<title>PolyBot - Redirecting...</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PolyBot — Multi-Strategy Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --up:#22c55e;--up-bg:rgba(34,197,94,.08);--up-border:rgba(34,197,94,.25);
+  --dn:#ef4444;--dn-bg:rgba(239,68,68,.08);--dn-border:rgba(239,68,68,.25);
+  --warn:#f59e0b;--warn-bg:rgba(245,158,11,.08);--warn-border:rgba(245,158,11,.25);
+  --blue:#3b82f6;--blue-bg:rgba(59,130,246,.08);--blue-border:rgba(59,130,246,.25);
+  --purple:#a855f7;--purple-bg:rgba(168,85,247,.08);--purple-border:rgba(168,85,247,.25);
+  --gold:#eab308;--gold-bg:rgba(234,179,8,.08);--gold-border:rgba(234,179,8,.25);
+  --cyan:#06b6d4;
+  --bg:#09090b;--bg1:#111113;--bg2:#18181b;--bg3:#1f1f23;--bg4:#27272a;
+  --border:#27272a;--border2:#3f3f46;
+  --t1:#fafafa;--t2:#a1a1aa;--t3:#71717a;--t4:#52525b;
+  --radius:12px;--radius-sm:8px;--radius-xs:6px;
+  --shadow:0 1px 3px rgba(0,0,0,.3),0 1px 2px rgba(0,0,0,.2);
+  --shadow-lg:0 10px 25px rgba(0,0,0,.4);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--t1);font-family:'Inter',system-ui,-apple-system,sans-serif;line-height:1.5;overflow-x:hidden;min-height:100vh}
+
+/* ── LAYOUT ── */
+.app{display:flex;height:100vh}
+
+/* ── SIDEBAR ── */
+.sidebar{width:240px;background:var(--bg1);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sidebar-logo{padding:20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.sidebar-logo .logo-text{font-size:18px;font-weight:900;letter-spacing:1px;font-family:'JetBrains Mono',monospace}
+.sidebar-logo .logo-text span{color:var(--cyan)}
+.sidebar-logo .version{font-size:10px;color:var(--t3);background:var(--bg3);padding:2px 8px;border-radius:20px;font-weight:600}
+
+.nav-section{padding:16px 12px 8px;font-size:10px;font-weight:700;color:var(--t4);letter-spacing:1.5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 16px;margin:2px 8px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-weight:500;color:var(--t3);transition:all .15s;position:relative}
+.nav-item:hover{background:var(--bg3);color:var(--t2)}
+.nav-item.active{background:var(--blue-bg);color:var(--blue);font-weight:600}
+.nav-item.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:20px;background:var(--blue);border-radius:0 4px 4px 0}
+.nav-icon{font-size:16px;width:20px;text-align:center}
+.nav-badge{margin-left:auto;font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;min-width:20px;text-align:center}
+.nav-badge.blue{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
+.nav-badge.green{background:var(--up-bg);color:var(--up);border:1px solid var(--up-border)}
+.nav-badge.gold{background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border)}
+.nav-badge.purple{background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border)}
+
+.sidebar-footer{margin-top:auto;padding:12px;border-top:1px solid var(--border)}
+.sidebar-status{font-size:11px;color:var(--t3);display:flex;align-items:center;gap:6px;padding:8px}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--up);flex-shrink:0}
+.status-dot.off{background:var(--dn)}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg1);flex-shrink:0}
+.topbar-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:10px}
+.topbar-title .page-icon{font-size:20px}
+.topbar-actions{display:flex;gap:8px;align-items:center}
+
+.content{flex:1;overflow-y:auto;padding:24px}
+.page{display:none}
+.page.active{display:block}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:var(--radius-sm);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{filter:brightness(1.1)}
+.btn-secondary{background:var(--bg3);color:var(--t2);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--bg4);color:var(--t1)}
+.btn-success{background:var(--up);color:#fff}
+.btn-sm{padding:5px 12px;font-size:11px}
+
+/* ── STAT CARDS ── */
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:border-color .2s}
+.stat-card:hover{border-color:var(--border2)}
+.stat-label{font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.5px;margin-bottom:4px}
+.stat-value{font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace}
+.stat-value.up{color:var(--up)}.stat-value.dn{color:var(--dn)}.stat-value.blue{color:var(--blue)}.stat-value.gold{color:var(--gold)}.stat-value.purple{color:var(--purple)}
+.stat-sub{font-size:10px;color:var(--t4);margin-top:2px}
+
+/* ── CONTROLS BAR ── */
+.controls{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+select,.input{background:var(--bg2);color:var(--t2);border:1px solid var(--border);padding:7px 12px;border-radius:var(--radius-sm);font-family:inherit;font-size:12px;cursor:pointer;transition:border-color .15s}
+select:hover,.input:hover{border-color:var(--border2)}
+select:focus,.input:focus{border-color:var(--blue);outline:none}
+.input{width:220px;color:var(--t1)}
+
+/* ── MARKET CARDS ── */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+.market-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:all .2s;cursor:default}
+.market-card:hover{border-color:var(--border2);box-shadow:var(--shadow)}
+.market-card .card-top{padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.market-card .card-question{font-size:13px;font-weight:600;line-height:1.4;flex:1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.trade-link{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border);border-radius:var(--radius-xs);font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap;transition:all .15s;flex-shrink:0}
+.trade-link:hover{background:var(--blue);color:#fff}
+.card-body{padding:0 16px 14px}
+.card-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px}
+.card-row .label{color:var(--t3);font-weight:500}
+.card-row .val{font-weight:700;font-family:'JetBrains Mono',monospace;font-size:12px}
+.card-row .val.up{color:var(--up)}.card-row .val.dn{color:var(--dn)}.card-row .val.blue{color:var(--blue)}.card-row .val.gold{color:var(--gold)}.card-row .val.purple{color:var(--purple)}
+.card-divider{height:1px;background:var(--border);margin:8px 0}
+.card-signal{display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--bg1);border-top:1px solid var(--border)}
+.signal-dir{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.signal-dir.up{background:var(--up-bg);color:var(--up);border:1px solid var(--up-border)}
+.signal-dir.dn{background:var(--dn-bg);color:var(--dn);border:1px solid var(--dn-border)}
+.signal-dir.neutral{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border)}
+.signal-score{font-size:16px;font-weight:800;font-family:'JetBrains Mono',monospace}
+.signal-meta{font-size:10px;color:var(--t4)}
+
+/* ── CHIP / TAG ── */
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.chip.up{background:var(--up-bg);color:var(--up);border:1px solid var(--up-border)}
+.chip.dn{background:var(--dn-bg);color:var(--dn);border:1px solid var(--dn-border)}
+.chip.warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border)}
+.chip.blue{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
+.chip.gold{background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border)}
+.chip.purple{background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border)}
+
+/* ── WHALE FEED ── */
+.feed{display:flex;flex-direction:column;gap:4px;max-height:500px;overflow-y:auto}
+.feed-item{display:grid;grid-template-columns:40px 140px 1fr 80px 60px;align-items:center;gap:8px;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;transition:border-color .15s}
+.feed-item:hover{border-color:var(--border2)}
+.feed-rank{color:var(--t3);font-weight:700;font-family:'JetBrains Mono',monospace;font-size:11px}
+.feed-trader{font-weight:600;display:flex;align-items:center;gap:6px}
+.feed-trade{color:var(--t2);font-size:11px;display:flex;align-items:center;gap:6px;overflow:hidden}
+.feed-trade a{color:var(--blue);text-decoration:none;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feed-trade a:hover{text-decoration:underline}
+.feed-size{text-align:right;font-weight:700;font-family:'JetBrains Mono',monospace;font-size:11px}
+.feed-time{text-align:right;color:var(--t4);font-size:10px}
+
+/* ── CONSENSUS ── */
+.consensus-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;margin-bottom:20px}
+.consensus-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;transition:border-color .15s}
+.consensus-card:hover{border-color:var(--border2)}
+.consensus-title{font-size:12px;font-weight:600;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.consensus-title a{color:var(--t1);text-decoration:none}
+.consensus-title a:hover{color:var(--blue);text-decoration:underline}
+.consensus-meta{display:flex;align-items:center;gap:8px;font-size:11px}
+
+/* ── FORECAST BOX ── */
+.forecast-box{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-top:8px}
+.edge-meter{height:6px;border-radius:3px;background:var(--bg4);overflow:hidden;margin-top:6px}
+.edge-fill{height:100%;border-radius:3px;transition:width .4s}
+
+/* ── ARB PROFIT ── */
+.arb-hero{text-align:center;padding:12px 0 4px}
+.arb-hero .pct{font-size:22px;font-weight:900;font-family:'JetBrains Mono',monospace}
+.arb-hero .label{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
+
+/* ── ACCURACY ── */
+.acc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.acc-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center}
+.acc-pct{font-size:36px;font-weight:900;font-family:'JetBrains Mono',monospace}
+.acc-name{font-size:11px;color:var(--t3);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.acc-target{font-size:10px;color:var(--t4);margin-top:4px}
+.acc-detail{font-size:11px;color:var(--t2);margin-top:6px}
+.acc-bar{height:4px;border-radius:2px;background:var(--bg4);margin-top:8px;overflow:hidden}
+.acc-fill{height:100%;border-radius:2px;transition:width .4s}
+
+/* ── SECTION ── */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.section-title{font-size:13px;font-weight:700;color:var(--t2);display:flex;align-items:center;gap:8px}
+.section-count{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
+
+/* ── LOG ── */
+.log-panel{margin-top:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.log-header{padding:10px 14px;font-size:11px;font-weight:700;color:var(--t3);letter-spacing:1px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.log-body{max-height:120px;overflow-y:auto;padding:8px 14px;font-size:10px;font-family:'JetBrains Mono',monospace;line-height:1.8;color:var(--t4)}
+.log-body.collapsed{display:none}
+
+/* ── EMPTY STATE ── */
+.empty{color:var(--t4);padding:40px;text-align:center;font-size:13px}
+.empty-icon{font-size:32px;margin-bottom:8px;opacity:.5}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  .sidebar{display:none}
+  .app{flex-direction:column}
+  .mobile-nav{display:flex!important}
+}
+.mobile-nav{display:none;background:var(--bg1);border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
+.mobile-nav .mnav{padding:10px 16px;font-size:11px;font-weight:600;color:var(--t3);white-space:nowrap;cursor:pointer;border-bottom:2px solid transparent}
+.mobile-nav .mnav.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--t4)}
+</style>
 </head>
 <body>
-<p>Redirecting to <a href="dashboard-v6.html">PolyBot Dashboard v6.0</a>...</p>
+<div class="app">
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-text"><span>Poly</span>Bot</div>
+    
+  </div>
+
+  <div class="nav-section">Strategies</div>
+  <div class="nav-item active" data-page="smart" onclick="switchPage('smart')">
+    <span class="nav-icon">&#x1f9e0;</span>Smart Money<span class="nav-badge gold" id="sm-nav-badge">0</span>
+  </div>
+  <div class="nav-item" data-page="weather" onclick="switchPage('weather')">
+    <span class="nav-icon">&#x1f327;</span>Weather<span class="nav-badge purple" id="wx-nav-badge">0</span>
+  </div>
+  <div class="nav-item" data-page="arb" onclick="switchPage('arb')">
+    <span class="nav-icon">&#x1f4b0;</span>Arbitrage<span class="nav-badge green" id="arb-nav-badge">0</span>
+  </div>
+  <div class="nav-item" data-page="crypto" onclick="switchPage('crypto')">
+    <span class="nav-icon">&#x26a1;</span>Crypto 5M<span class="nav-badge blue" id="cr-nav-badge">0</span>
+  </div>
+
+  <div class="nav-section">Analytics</div>
+  <div class="nav-item" data-page="accuracy" onclick="switchPage('accuracy')">
+    <span class="nav-icon">&#x1f3af;</span>Accuracy
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="sidebar-status"><span class="status-dot" id="conn-dot"></span><span id="conn-text">Connecting...</span></div>
+  </div>
+</aside>
+
+<!-- ═══ MOBILE NAV ═══ -->
+<div class="mobile-nav">
+  <div class="mnav active" onclick="switchPage('smart')">Smart Money</div>
+  <div class="mnav" onclick="switchPage('weather')">Weather</div>
+  <div class="mnav" onclick="switchPage('arb')">Arbitrage</div>
+  <div class="mnav" onclick="switchPage('crypto')">Crypto 5M</div>
+  <div class="mnav" onclick="switchPage('accuracy')">Accuracy</div>
+</div>
+
+<!-- ═══ MAIN ═══ -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title"><span class="page-icon" id="page-icon">&#x1f9e0;</span><span id="page-title">Smart Money Tracker</span></div>
+    <div class="topbar-actions" id="topbar-actions"></div>
+  </div>
+
+  <div class="content">
+
+    <!-- ════════════ SMART MONEY PAGE ════════════ -->
+    <div class="page active" id="pg-smart">
+      <div class="stat-row" id="sm-stats">
+        <div class="stat-card"><div class="stat-label">Tracked Wallets</div><div class="stat-value blue" id="sm-tracked">--</div></div>
+        <div class="stat-card"><div class="stat-label">Combined P/L</div><div class="stat-value gold" id="sm-pnl">--</div></div>
+        <div class="stat-card"><div class="stat-label">Avg ROI</div><div class="stat-value up" id="sm-roi">--</div></div>
+        <div class="stat-card"><div class="stat-label">Signals Today</div><div class="stat-value" id="sm-signals">0</div></div>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" id="sm-refresh" onclick="smFetchTrades()">&#x21bb; Refresh</button>
+        <select id="sm-filter" onchange="smFetchTrades()"><option value="all">All Archetypes</option><option value="sniper">Snipers (&gt;30% ROI)</option><option value="sharp">Sharps (10-30%)</option><option value="grinder">Grinders (&lt;10%)</option></select>
+        <select id="sm-cat" onchange="smFetchTrades()"><option value="all">All Categories</option><option value="politics">Politics</option><option value="sports">Sports</option><option value="crypto">Crypto</option><option value="other">Other</option></select>
+        <select id="sm-sort" onchange="smRender()"><option value="time">Sort: Newest</option><option value="size">Sort: Largest Trade</option><option value="roi">Sort: Highest ROI</option><option value="whales">Sort: Most Whales</option></select>
+      </div>
+      <div class="section-header"><div class="section-title">Whale Consensus</div></div>
+      <div id="sm-consensus" class="consensus-grid"><div class="empty"><div class="empty-icon">&#x1f40b;</div>Loading whale positions...</div></div>
+      <div class="section-header" style="margin-top:16px"><div class="section-title">Recent Trades<span class="section-count" id="sm-feed-count">0</span></div></div>
+      <div class="feed" id="sm-feed"><div class="empty"><div class="empty-icon">&#x1f4e1;</div>Loading smart money feed...</div></div>
+    </div>
+
+    <!-- ════════════ WEATHER PAGE ════════════ -->
+    <div class="page" id="pg-weather">
+      <div class="stat-row" id="wx-stats">
+        <div class="stat-card"><div class="stat-label">Weather Markets</div><div class="stat-value purple" id="wx-total">--</div></div>
+        <div class="stat-card"><div class="stat-label">Signals (&gt;8% edge)</div><div class="stat-value up" id="wx-signals">--</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Edge</div><div class="stat-value blue" id="wx-edge">--</div></div>
+        <div class="stat-card"><div class="stat-label">Accuracy</div><div class="stat-value up" id="wx-acc">--</div></div>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" id="wx-refresh" onclick="wxScan()">&#x1f50d; Scan Markets</button>
+        <input type="text" class="input" id="wx-apikey" value="" placeholder="Not needed \u2014 using Open-Meteo satellite data" disabled style="opacity:0.5">
+        <select id="wx-threshold" onchange="wxRender()"><option value="8">Min 8% edge</option><option value="5">Min 5% edge</option><option value="10">Min 10% edge</option><option value="15">Min 15% edge</option></select>
+        <select id="wx-sort" onchange="wxRender()"><option value="edge">Sort: Highest Edge</option><option value="score">Sort: Signal Score</option><option value="liquidity">Sort: Liquidity</option><option value="price">Sort: Cheapest YES</option><option value="date">Sort: Soonest Date</option></select>
+      </div>
+      <div class="section-header"><div class="section-title">Weather Market Opportunities<span class="section-count" id="wx-count">0</span></div></div>
+      <div class="card-grid" id="wx-grid"><div class="empty"><div class="empty-icon">&#x1f326;</div>Click "Scan Markets" to find weather opportunities</div></div>
+    </div>
+
+    <!-- ════════════ ARBITRAGE PAGE ════════════ -->
+    <div class="page" id="pg-arb">
+      <div class="stat-row" id="arb-stats">
+        <div class="stat-card"><div class="stat-label">Markets Scanned</div><div class="stat-value blue" id="arb-scanned">--</div></div>
+        <div class="stat-card"><div class="stat-label">Arb Opportunities</div><div class="stat-value up" id="arb-opps">--</div></div>
+        <div class="stat-card"><div class="stat-label">Straddle Opps</div><div class="stat-value gold" id="arb-straddles">--</div></div>
+        <div class="stat-card"><div class="stat-label">Best Edge</div><div class="stat-value up" id="arb-best">--</div></div>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" id="arb-refresh" onclick="arbScan()">&#x1f50d; Scan for Arbitrage</button>
+        <select id="arb-sort" onchange="arbRender()"><option value="edge">Sort by Edge</option><option value="liquidity">Sort by Liquidity</option></select>
+      </div>
+      <div class="section-header"><div class="section-title">Same-Market Arbitrage<span class="section-count" id="arb-count">0</span></div></div>
+      <div class="card-grid" id="arb-grid"><div class="empty"><div class="empty-icon">&#x1f4b8;</div>Click "Scan for Arbitrage" to find opportunities</div></div>
+      <div class="section-header" style="margin-top:20px"><div class="section-title">Straddle Opportunities<span class="section-count" id="str-count">0</span></div></div>
+      <div class="card-grid" id="str-grid"><div class="empty"><div class="empty-icon">&#x1f3b0;</div>Straddle opportunities will appear here</div></div>
+    </div>
+
+    <!-- ════════════ CRYPTO 5M PAGE ════════════ -->
+    <div class="page" id="pg-crypto">
+      <div class="stat-row">
+        <div class="stat-card"><div class="stat-label">Active Markets</div><div class="stat-value blue" id="cr-act">--</div></div>
+        <div class="stat-card"><div class="stat-label">Strong Signals</div><div class="stat-value up" id="cr-str">--</div></div>
+        <div class="stat-card"><div class="stat-label">Window Ends</div><div class="stat-value gold" id="cr-win">--</div></div>
+        <div class="stat-card"><div class="stat-label">Accuracy</div><div class="stat-value up" id="cr-acc">--</div></div>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="crScan()">&#x21bb; Refresh</button>
+        <select id="cr-asset" onchange="crRender()"><option value="ALL">All Assets</option><option value="BTC">BTC</option><option value="ETH">ETH</option><option value="SOL">SOL</option><option value="XRP">XRP</option></select>
+        <select id="cr-sort" onchange="crRender()"><option value="score">Sort: Signal Strength</option><option value="asset">Sort: Asset Name</option><option value="price">Sort: YES Price</option></select>
+      </div>
+      <div class="card-grid" id="cr-grid"><div class="empty"><div class="empty-icon">&#x26a1;</div>Loading 5-min crypto markets...</div></div>
+    </div>
+
+    <!-- ════════════ ACCURACY PAGE ════════════ -->
+    <div class="page" id="pg-accuracy">
+      <div class="section-header"><div class="section-title">Prediction Accuracy</div></div>
+      <div class="acc-grid" id="acc-panel"></div>
+      <div class="log-panel" style="margin-top:20px">
+        <div class="log-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">Accuracy Log<span style="font-size:10px;color:var(--t4)">click to toggle</span></div>
+        <div id="acc-log" class="log-body"><div class="empty" style="padding:20px">No accuracy data yet. Use the strategies to generate predictions.</div></div>
+      </div>
+    </div>
+
+    <!-- ═══ LOG ═══ -->
+    <div class="log-panel">
+      <div class="log-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">Activity Log<span style="font-size:10px;color:var(--t4)">click to toggle</span></div>
+      <div id="log" class="log-body"></div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// POLYBOT v6.0 — MULTI-STRATEGY ENGINE
+// ═══════════════════════════════════════════════════════════
+
+// ── API URLs ──
+var _onPoly=location.hostname.indexOf('polymarket.com')!==-1;
+var _GAMMA=_onPoly?'https://gamma-api.polymarket.com':'/api/gamma';
+var _CLOB=_onPoly?'https://clob.polymarket.com':'/api/clob';
+var _DATA='https://data-api.polymarket.com';
+var _COINBASE=_onPoly?'https://api.coinbase.com':'/api/coinbase';
+var _EXCHANGE=_onPoly?'https://api.exchange.coinbase.com':'/api/exchange';
+
+// ── Accuracy Store ──
+var _acc={
+  smartMoney:{wins:0,losses:0,pending:0,log:[]},
+  weather:{wins:0,losses:0,pending:0,log:[]},
+  arb:{wins:0,losses:0,pending:0,log:[]},
+  crypto:{wins:0,losses:0,neutral:0,log:[]}
+};
+
+// ── Utilities ──
+function $(id){return document.getElementById(id)}
+function lg(msg,type){var el=$('log');if(!el)return;var t=new Date().toLocaleTimeString();var c=type==='err'?'var(--dn)':type==='ok'?'var(--up)':'var(--t4)';el.innerHTML='<div style="color:'+c+'">['+t+'] '+msg+'</div>'+el.innerHTML;if(el.children.length>80)el.lastChild.remove();}
+function fmtUSD(n){if(n===undefined||n===null||isNaN(n))return'--';return n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1000?'$'+(n/1000).toFixed(1)+'K':'$'+n.toFixed(2)}
+function fmtPct(n){return(n>0?'+':'')+n.toFixed(1)+'%'}
+function timeAgo(ts){var d=Math.floor((Date.now()/1000-ts)/60);return d<1?'now':d<60?d+'m':d<1440?Math.floor(d/60)+'h':Math.floor(d/1440)+'d'}
+// conditionId→eventSlug lookup (built during live market loading)
+var _cidToSlug={};
+function polyUrl(m){
+  // Prefer _eventSlug (extracted from Gamma events array), then eventSlug (Data API), then slug
+  var slug=m._eventSlug||m.eventSlug||'';
+  // If still empty, try slug but NOT conditionId (conditionId is a hex hash, not a valid URL)
+  if(!slug)slug=m.slug||'';
+  // Last resort: look up conditionId in our mapping
+  if(!slug&&m.conditionId&&_cidToSlug[m.conditionId])slug=_cidToSlug[m.conditionId];
+  return slug?'https://polymarket.com/event/'+slug:'https://polymarket.com';
+}
+
+// ── Page Navigation ──
+var _pageConfig={
+  smart:{icon:'\u{1f9e0}',title:'Smart Money Tracker'},
+  weather:{icon:'\u{1f327}',title:'Weather Arbitrage'},
+  arb:{icon:'\u{1f4b0}',title:'Arbitrage Scanner'},
+  crypto:{icon:'\u26a1',title:'Crypto 5-Minute'},
+  accuracy:{icon:'\u{1f3af}',title:'Prediction Accuracy'}
+};
+function switchPage(name){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});
+  document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active')});
+  document.querySelectorAll('.mnav').forEach(function(n){n.classList.remove('active')});
+  $('pg-'+name).classList.add('active');
+  var ni=document.querySelector('.nav-item[data-page="'+name+'"]');if(ni)ni.classList.add('active');
+  var mi=document.querySelectorAll('.mnav');mi.forEach(function(m){if(m.textContent.toLowerCase().indexOf(name)!==-1||
+    (name==='smart'&&m.textContent.indexOf('Smart')!==-1)||
+    (name==='arb'&&m.textContent.indexOf('Arb')!==-1)||
+    (name==='crypto'&&m.textContent.indexOf('Crypto')!==-1)||
+    (name==='accuracy'&&m.textContent.indexOf('Acc')!==-1)||
+    (name==='weather'&&m.textContent.indexOf('Weather')!==-1))m.classList.add('active');});
+  var cfg=_pageConfig[name]||{};
+  $('page-icon').textContent=cfg.icon||'';
+  $('page-title').textContent=cfg.title||name;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SMART MONEY TRACKER
+// ═══════════════════════════════════════════════════════════
+var _smTraders=[];var _smFeed=[];var _smConsensus={};
+var _liveMarketSlugs={};  // cache of live market slugs
+
+// Fetch all currently active/open market slugs to filter out resolved ones
+async function smLoadLiveMarkets(){
+  lg('Loading live market index...');
+  var slugs={};
+  for(var off=0;off<2000;off+=100){
+    try{
+      var r=await fetch(_GAMMA+'/markets?limit=100&active=true&closed=false&offset='+off+'&order=liquidity&ascending=false');
+      var d=await r.json();if(!d||!d.length)break;
+      d.forEach(function(m){
+        // Extract the correct event slug from the events array
+        var evSlug=(m.events&&m.events[0])?m.events[0].slug:'';
+        var mSlug=m.slug||'';
+        var cid=m.conditionId||'';
+        // Index all identifiers as live
+        if(evSlug)slugs[evSlug]=true;
+        if(mSlug)slugs[mSlug]=true;
+        if(cid)slugs[cid]=true;
+        // Build conditionId → eventSlug lookup for URL resolution
+        if(cid&&evSlug)_cidToSlug[cid]=evSlug;
+        // Also map market slug → event slug
+        if(mSlug&&evSlug&&mSlug!==evSlug)_cidToSlug[mSlug]=evSlug;
+      });
+    }catch(e){break;}
+  }
+  _liveMarketSlugs=slugs;
+  lg('Indexed '+Object.keys(slugs).length+' live markets, '+Object.keys(_cidToSlug).length+' slug mappings','ok');
+}
+
+function isLiveMarket(tr){
+  // Check if any of the trade's market identifiers match a live market
+  var slug=tr.eventSlug||tr.slug||tr.conditionId||'';
+  if(!slug)return false;
+  if(_liveMarketSlugs[slug])return true;
+  if(tr.conditionId&&_liveMarketSlugs[tr.conditionId])return true;
+  if(tr.slug&&_liveMarketSlugs[tr.slug])return true;
+  return false;
+}
+
+async function smLoadLeaderboard(){
+  lg('Loading top 100 traders...');
+  var all=[];
+  for(var off=0;off<100;off+=50){
+    try{var r=await fetch(_DATA+'/v1/leaderboard?category=OVERALL&timePeriod=ALL&orderBy=PNL&limit=50&offset='+off);var d=await r.json();all=all.concat(d);}catch(e){lg('Leaderboard error: '+e.message,'err');}
+  }
+  _smTraders=all.map(function(t){
+    var roi=t.vol>0?(t.pnl/t.vol*100):0;
+    return{rank:t.rank,name:t.userName||t.proxyWallet.slice(0,10),wallet:t.proxyWallet,pnl:t.pnl,vol:t.vol,roi:roi,archetype:roi>30?'sniper':roi>10?'sharp':'grinder',x:t.xUsername||''};
+  });
+  lg('Loaded '+_smTraders.length+' traders','ok');
+}
+
+async function smFetchTrades(){
+  if(!_smTraders.length)await smLoadLeaderboard();
+  if(!Object.keys(_liveMarketSlugs).length)await smLoadLiveMarkets();
+  lg('Fetching recent whale trades...');
+  var filter=$('sm-filter').value;
+  var traders=_smTraders.filter(function(t){
+    if(filter==='sniper')return t.archetype==='sniper';
+    if(filter==='sharp')return t.archetype==='sharp';
+    if(filter==='grinder')return t.archetype==='grinder';
+    return true;
+  });
+  var subset=traders.slice(0,30);var allTrades=[];
+  var batches=[];for(var i=0;i<subset.length;i+=10)batches.push(subset.slice(i,i+10));
+  for(var b=0;b<batches.length;b++){
+    var proms=batches[b].map(function(t){
+      return fetch(_DATA+'/v1/trades?user='+t.wallet+'&limit=10').then(function(r){return r.json()}).then(function(trades){return trades.map(function(tr){tr._trader=t;return tr;});}).catch(function(){return[];});
+    });
+    var results=await Promise.all(proms);results.forEach(function(tr){allTrades=allTrades.concat(tr);});
+  }
+
+  // ── CRITICAL: Filter to only LIVE markets ──
+  var cutoff=Math.floor(Date.now()/1000)-(7*24*3600); // Last 7 days only
+  allTrades=allTrades.filter(function(tr){
+    // Must be a recent trade
+    if(tr.timestamp&&tr.timestamp<cutoff)return false;
+    // Must be on a live/open market (not resolved)
+    return isLiveMarket(tr);
+  });
+
+  allTrades.forEach(function(tr){
+    var title=(tr.title||'').toLowerCase();
+    if(title.match(/bitcoin|btc|eth|crypto|solana|xrp|updown/))tr._cat='crypto';
+    else if(title.match(/temperature|weather|fahrenheit|celsius/))tr._cat='weather';
+    else if(title.match(/trump|biden|election|president|congress|senate|republican|democrat/))tr._cat='politics';
+    else if(title.match(/nfl|nba|mlb|nhl|ufc|championship|match|spread:|vs\./))tr._cat='sports';
+    else tr._cat='other';
+  });
+  var catFilter=$('sm-cat').value;
+  if(catFilter!=='all')allTrades=allTrades.filter(function(tr){return tr._cat===catFilter});
+  allTrades.sort(function(a,b){return(b.timestamp||0)-(a.timestamp||0)});
+  _smFeed=allTrades.slice(0,100);
+  _smConsensus={};
+  allTrades.forEach(function(tr){
+    var key=tr.eventSlug||tr.slug||tr.conditionId;if(!key)return;
+    // For the URL slug, prefer eventSlug (Data API gives correct event slug), fall back to slug, then lookup conditionId
+    var urlSlug=tr.eventSlug||tr.slug||(tr.conditionId&&_cidToSlug[tr.conditionId])||'';
+    if(!_smConsensus[key])_smConsensus[key]={title:tr.title||'Unknown',buys:0,sells:0,totalSize:0,traders:[],slug:urlSlug};
+    if(tr.side==='BUY')_smConsensus[key].buys++;else _smConsensus[key].sells++;
+    _smConsensus[key].totalSize+=parseFloat(tr.size||0);
+    var tName=tr._trader?tr._trader.name:'anon';
+    if(_smConsensus[key].traders.indexOf(tName)===-1)_smConsensus[key].traders.push(tName);
+  });
+  smRender();
+  lg('Smart money: '+_smFeed.length+' live trades, '+Object.keys(_smConsensus).length+' active markets','ok');
+}
+
+function smRender(){
+  $('sm-tracked').textContent=_smTraders.length;
+  var totalPnl=_smTraders.reduce(function(s,t){return s+t.pnl},0);
+  $('sm-pnl').textContent=fmtUSD(totalPnl);
+  var avgRoi=_smTraders.length?(_smTraders.reduce(function(s,t){return s+t.roi},0)/_smTraders.length):0;
+  $('sm-roi').textContent=fmtPct(avgRoi);
+  $('sm-signals').textContent=_smFeed.length;
+  $('sm-nav-badge').textContent=_smFeed.length;$('sm-feed-count').textContent=_smFeed.length;
+
+  // Sort feed
+  var smSort=$('sm-sort').value;
+  var sortedFeed=_smFeed.slice();
+  if(smSort==='size')sortedFeed.sort(function(a,b){return parseFloat(b.size||0)-parseFloat(a.size||0)});
+  else if(smSort==='roi')sortedFeed.sort(function(a,b){return(b._trader?b._trader.roi:0)-(a._trader?a._trader.roi:0)});
+  // default 'time' — already sorted by timestamp
+
+  // Consensus
+  var consArr=Object.values(_smConsensus);
+  if(smSort==='whales')consArr.sort(function(a,b){return b.traders.length-a.traders.length});
+  else consArr.sort(function(a,b){return b.traders.length-a.traders.length});
+  var ch='';
+  consArr.slice(0,12).forEach(function(c){
+    var cls=c.buys>c.sells?'up':c.sells>c.buys?'dn':'warn';
+    var url=polyUrl({_eventSlug:c.slug,eventSlug:c.slug});
+    var buySignal=c.buys>c.sells?'BUY YES':'BUY NO';var ratio=Math.max(c.buys,c.sells)/(c.buys+c.sells)*100;
+    ch+='<div class="consensus-card"><div class="consensus-title"><a href="'+url+'" target="_blank">'+c.title.slice(0,55)+'</a></div>'+
+      '<div class="consensus-meta"><span class="chip '+cls+'">'+c.traders.length+' whales \u2192 '+buySignal+' ('+Math.round(ratio)+'%)</span>'+
+      '<span style="color:var(--t4);font-size:10px">'+fmtUSD(c.totalSize)+' vol</span>'+
+      '<a href="'+url+'" target="_blank" class="trade-link" style="font-size:9px;padding:2px 8px">Trade</a></div></div>';
+  });
+  $('sm-consensus').innerHTML=ch||'<div class="empty">No consensus data yet.</div>';
+
+  // Feed
+  var fh='';
+  sortedFeed.slice(0,50).forEach(function(tr){
+    var t=tr._trader||{name:'?',rank:'?',archetype:'grinder',roi:0};
+    var arcCls=t.archetype==='sniper'?'gold':t.archetype==='sharp'?'blue':'warn';
+    var sideCls=tr.side==='BUY'?'up':'dn';
+    var url=polyUrl(tr);
+    fh+='<div class="feed-item">'+
+      '<span class="feed-rank">#'+t.rank+'</span>'+
+      '<span class="feed-trader">'+t.name.slice(0,14)+' <span class="chip '+arcCls+'" style="font-size:8px;padding:1px 5px">'+t.archetype.toUpperCase()+'</span></span>'+
+      '<span class="feed-trade"><span class="chip '+sideCls+'" style="font-size:8px">'+tr.side+'</span> <a href="'+url+'" target="_blank">'+(tr.title||'').slice(0,40)+'</a> @ $'+parseFloat(tr.price||0).toFixed(3)+'</span>'+
+      '<span class="feed-size" style="color:var(--'+sideCls+')">'+fmtUSD(parseFloat(tr.size||0))+'</span>'+
+      '<span class="feed-time">'+timeAgo(tr.timestamp)+'</span></div>';
+  });
+  $('sm-feed').innerHTML=fh||'<div class="empty">No trades found.</div>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// WEATHER FORECAST ARBITRAGE
+// ═══════════════════════════════════════════════════════════
+var _wxMarkets=[];var _wxScans=0;
+
+function wxParseQuestion(q){
+  var city=null,threshold=null,unit=null,op=null,date=null;
+  var cm=q.match(/in ([A-Z][a-zA-Z\s.]+?)(?:\s+be|\s+reach|\s+on|\s+exceed)/);if(cm)city=cm[1].trim();
+  if(!city)cm=q.match(/temperature in ([A-Z][a-zA-Z\s.]+?)[\s,]/);if(cm)city=cm[1].trim();
+  var tm=q.match(/(\-?\d+)\u00b0([FC])/);if(tm){threshold=parseInt(tm[1]);unit=tm[2];}
+  var rm=q.match(/between (\d+)-(\d+)\u00b0([FC])/);if(rm){threshold=[parseInt(rm[1]),parseInt(rm[2])];unit=rm[3];op='between';}
+  if(!op){if(q.match(/or higher|or above/i))op='>=';else if(q.match(/or below|or lower/i))op='<=';else op='>=';}
+  var dm=q.match(/on (March|April|May|June|July|August|September|October|November|December|January|February)\s+(\d+)/i);
+  if(dm){var months={January:1,February:2,March:3,April:4,May:5,June:6,July:7,August:8,September:9,October:10,November:11,December:12};
+    var mon=months[dm[1]]||3;var day=parseInt(dm[2]);date='2026-'+(mon<10?'0':'')+mon+'-'+(day<10?'0':'')+day;}
+  return{city:city,threshold:threshold,unit:unit,op:op,date:date};
+}
+
+function erf(x){var t=1/(1+0.3275911*Math.abs(x));var y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return x>=0?y:-y;}
+
+async function wxScan(){
+  lg('Scanning weather markets...');_wxScans++;
+  var allMarkets=[];
+  for(var off=0;off<500;off+=100){
+    try{var r=await fetch(_GAMMA+'/markets?limit=100&active=true&closed=false&offset='+off+'&order=liquidity&ascending=false');var d=await r.json();if(!d.length)break;allMarkets=allMarkets.concat(d);}catch(e){break;}
+  }
+  var kw=['temperature','fahrenheit','celsius','\u00b0F','\u00b0C','weather','precipitation','rain','snow'];
+  _wxMarkets=allMarkets.filter(function(m){var q=(m.question||'').toLowerCase();return kw.some(function(k){return q.indexOf(k.toLowerCase())!==-1});});
+  _wxMarkets.forEach(function(m){
+    m._parsed=wxParseQuestion(m.question||'');
+    var prices=JSON.parse(m.outcomePrices||'[]');
+    m._yesPrice=parseFloat(prices[0]||'0.5');m._noPrice=parseFloat(prices[1]||'0.5');m._liq=parseFloat(m.liquidity||'0');
+    // Extract correct event slug from Gamma API events array
+    m._eventSlug=(m.events&&m.events[0])?m.events[0].slug:(m.eventSlug||m.slug||'');
+  });
+  // ── City coords for geocoding ──
+  var _wxCityCoords={
+    'New York':{lat:40.71,lon:-74.01},'Los Angeles':{lat:34.05,lon:-118.24},'Chicago':{lat:41.88,lon:-87.63},
+    'Houston':{lat:29.76,lon:-95.37},'Phoenix':{lat:33.45,lon:-112.07},'Philadelphia':{lat:39.95,lon:-75.17},
+    'San Antonio':{lat:29.42,lon:-98.49},'San Diego':{lat:32.72,lon:-117.16},'Dallas':{lat:32.78,lon:-96.80},
+    'Miami':{lat:25.76,lon:-80.19},'Atlanta':{lat:33.75,lon:-84.39},'Boston':{lat:42.36,lon:-71.06},
+    'Seattle':{lat:47.61,lon:-122.33},'Denver':{lat:39.74,lon:-104.99},'Nashville':{lat:36.16,lon:-86.78},
+    'Washington':{lat:38.91,lon:-77.04},'Las Vegas':{lat:36.17,lon:-115.14},'Portland':{lat:45.52,lon:-122.68},
+    'Minneapolis':{lat:44.98,lon:-93.27},'Detroit':{lat:42.33,lon:-83.05},'Austin':{lat:30.27,lon:-97.74},
+    'San Francisco':{lat:37.77,lon:-122.42},'Tampa':{lat:27.95,lon:-82.46},'Orlando':{lat:28.54,lon:-81.38},
+    'Charlotte':{lat:35.23,lon:-80.84},'Indianapolis':{lat:39.77,lon:-86.16},'Columbus':{lat:39.96,lon:-82.99},
+    'Memphis':{lat:35.15,lon:-90.05},'Baltimore':{lat:39.29,lon:-76.61},'Milwaukee':{lat:43.04,lon:-87.91},
+    'Anchorage':{lat:61.22,lon:-149.90},'Honolulu':{lat:21.31,lon:-157.86},'Salt Lake City':{lat:40.76,lon:-111.89},
+    'Kansas City':{lat:39.10,lon:-94.58},'Sacramento':{lat:38.58,lon:-121.49},'St. Louis':{lat:38.63,lon:-90.20},
+    'Cleveland':{lat:41.50,lon:-81.69},'Pittsburgh':{lat:40.44,lon:-79.99},'Cincinnati':{lat:39.10,lon:-84.51},
+    'Raleigh':{lat:35.78,lon:-78.64},'New Orleans':{lat:29.95,lon:-90.07},'Louisville':{lat:38.25,lon:-85.76},
+    'Oklahoma City':{lat:35.47,lon:-97.52},'Richmond':{lat:37.54,lon:-77.44},'Buffalo':{lat:42.89,lon:-78.88},
+    'London':{lat:51.51,lon:-0.13},'Paris':{lat:48.86,lon:2.35},'Tokyo':{lat:35.68,lon:139.69},
+    'Sydney':{lat:-33.87,lon:151.21},'Toronto':{lat:43.65,lon:-79.38},'Vancouver':{lat:49.28,lon:-123.12}
+  };
+
+  // ── Resolve coordinates for all markets ──
+  lg('Geocoding cities...');
+  var geoProms=_wxMarkets.map(function(m){
+    var p=m._parsed;if(!p.city)return Promise.resolve();
+    var coords=null;
+    Object.keys(_wxCityCoords).forEach(function(c){if(p.city.toLowerCase().indexOf(c.toLowerCase())!==-1)coords=_wxCityCoords[c];});
+    if(coords){m._coords=coords;return Promise.resolve();}
+    return fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(p.city)+'&count=1')
+      .then(function(r){return r.json()}).then(function(geo){
+        if(geo&&geo.results&&geo.results[0])m._coords={lat:geo.results[0].latitude,lon:geo.results[0].longitude};
+      }).catch(function(){});
+  });
+  await Promise.all(geoProms);
+
+  _wxMarkets.forEach(function(m){
+    m._edge=null;m._forecast=null;m._sat=null;
+  });
+
+  // ── Fetch satellite + atmospheric data from Open-Meteo (always, free, no key) ──
+  lg('Fetching satellite & atmospheric data (Open-Meteo)...');
+  var satProms=_wxMarkets.map(function(m){
+    var p=m._parsed;if(!m._coords||!p.date)return Promise.resolve();
+    var tu=p.unit==='F'?'fahrenheit':'celsius';
+    return fetch('https://api.open-meteo.com/v1/forecast?latitude='+m._coords.lat+'&longitude='+m._coords.lon+
+      '&daily=temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,shortwave_radiation_sum,uv_index_max,et0_fao_evapotranspiration,weathercode,sunshine_duration'+
+      '&temperature_unit='+tu+'&timezone=auto&start_date='+p.date+'&end_date='+p.date)
+      .then(function(r){return r.json()}).then(function(data){
+        if(!data||!data.daily||data.daily.temperature_2m_max[0]===null)return;
+        var d=data.daily;
+        var maxT=d.temperature_2m_max[0],minT=d.temperature_2m_min[0],avgT=(maxT+minT)/2;
+        var rain=d.precipitation_probability_max?d.precipitation_probability_max[0]:null;
+        var wcode=d.weathercode?d.weathercode[0]:null;
+        var cond=wcode!==null?wxCodeToText(wcode):'';
+        if(p.unit==='F'){m._forecast={maxF:maxT,minF:minT,avgF:avgT,maxC:(maxT-32)*5/9,minC:(minT-32)*5/9,avgC:(avgT-32)*5/9,condition:cond,rain:rain,src:'Open-Meteo Satellite'};}
+        else{m._forecast={maxC:maxT,minC:minT,avgC:avgT,maxF:maxT*9/5+32,minF:minT*9/5+32,avgF:avgT*9/5+32,condition:cond,rain:rain,src:'Open-Meteo Satellite'};}
+        // Satellite-derived atmospheric data
+        m._sat={
+          apparentMax:d.apparent_temperature_max?d.apparent_temperature_max[0]:null,
+          apparentMin:d.apparent_temperature_min?d.apparent_temperature_min[0]:null,
+          precipMm:d.precipitation_sum?d.precipitation_sum[0]:null,
+          windMax:d.wind_speed_10m_max?d.wind_speed_10m_max[0]:null,
+          gustMax:d.wind_gusts_10m_max?d.wind_gusts_10m_max[0]:null,
+          windDir:d.wind_direction_10m_dominant?d.wind_direction_10m_dominant[0]:null,
+          solarRad:d.shortwave_radiation_sum?d.shortwave_radiation_sum[0]:null,
+          uvIndex:d.uv_index_max?d.uv_index_max[0]:null,
+          evapotransp:d.et0_fao_evapotranspiration?d.et0_fao_evapotranspiration[0]:null,
+          sunshineSec:d.sunshine_duration?d.sunshine_duration[0]:null
+        };
+        m._sat.sunshineHrs=m._sat.sunshineSec?Math.round(m._sat.sunshineSec/3600*10)/10:null;
+        wxCalcEdge(m);
+      }).catch(function(e){lg('Open-Meteo err: '+e.message,'err');});
+  });
+  await Promise.all(satProms);
+
+  // ── Fetch historical climate normals (5-yr avg for same date) ──
+  lg('Fetching climate normals...');
+  var histProms=_wxMarkets.map(function(m){
+    var p=m._parsed;if(!m._coords||!p.date)return Promise.resolve();
+    var tu=p.unit==='F'?'fahrenheit':'celsius';
+    // Get same date across 5 previous years
+    var yr=parseInt(p.date.slice(0,4));var md=p.date.slice(4); // -MM-DD
+    var startYr=yr-5;
+    return fetch('https://archive-api.open-meteo.com/v1/archive?latitude='+m._coords.lat+'&longitude='+m._coords.lon+
+      '&start_date='+startYr+md+'&end_date='+(yr-1)+md+'&daily=temperature_2m_max,temperature_2m_min&temperature_unit='+tu+'&timezone=auto')
+      .then(function(r){return r.json()}).then(function(data){
+        if(!data||!data.daily)return;
+        var targetMD=p.date.slice(5);
+        var allMax=data.daily.temperature_2m_max;
+        var allMin=data.daily.temperature_2m_min;
+        var allDates=data.daily.time;
+        var maxTemps=[],minTemps=[];
+        for(var i=0;i<allDates.length;i++){
+          if(allDates[i].slice(5)===targetMD){
+            if(allMax[i]!==null)maxTemps.push(allMax[i]);
+            if(allMin[i]!==null)minTemps.push(allMin[i]);
+          }
+        }
+        if(maxTemps.length){
+          var avgHigh=maxTemps.reduce(function(a,b){return a+b},0)/maxTemps.length;
+          var avgLow=minTemps.reduce(function(a,b){return a+b},0)/minTemps.length;
+          var maxHigh=Math.max.apply(null,maxTemps);var minHigh=Math.min.apply(null,maxTemps);
+          m._climate={avgHigh:Math.round(avgHigh*10)/10,avgLow:Math.round(avgLow*10)/10,maxHigh:maxHigh,minHigh:minHigh,years:maxTemps.length,spread:Math.round((maxHigh-minHigh)*10)/10};
+        }
+      }).catch(function(){});
+  });
+  await Promise.all(histProms);
+
+  // ── NOAA weather alerts (US cities only, free) ──
+  lg('Checking NOAA alerts...');
+  var alertProms=_wxMarkets.map(function(m){
+    if(!m._coords)return Promise.resolve();
+    // NOAA only covers US coords roughly
+    if(m._coords.lat<24||m._coords.lat>72||m._coords.lon<-180||m._coords.lon>-60)return Promise.resolve();
+    return fetch('https://api.weather.gov/alerts/active?point='+m._coords.lat.toFixed(4)+','+m._coords.lon.toFixed(4),{headers:{'User-Agent':'PolyBot/1.0'}})
+      .then(function(r){return r.json()}).then(function(data){
+        if(data&&data.features&&data.features.length){
+          m._alerts=data.features.map(function(f){return{event:f.properties.event||'Alert',severity:f.properties.severity||'Unknown',headline:(f.properties.headline||'').slice(0,100)};});
+        }
+      }).catch(function(){});
+  });
+  await Promise.all(alertProms);
+
+  // ── Build 10 signals per market ──
+  _wxMarkets.forEach(function(m){
+    var sigs=[];var score=0;var p=m._parsed;
+    // S1: Price Dislocation — YES+NO far from $1.00
+    var spread=m._yesPrice+m._noPrice;var disloc=Math.abs(1.0-spread);
+    if(disloc>0.03){sigs.push({name:'Price Disloc',val:fmtPct(disloc*100),cls:disloc>0.05?'up':'warn'});score+=disloc>0.05?15:8;}
+    // S2: Extreme Price
+    if(m._yesPrice<0.20){sigs.push({name:'YES Cheap',val:'$'+m._yesPrice.toFixed(2),cls:'up'});score+=12;}
+    else if(m._yesPrice>0.85){sigs.push({name:'YES Costly',val:'$'+m._yesPrice.toFixed(2),cls:'dn'});score+=10;}
+    if(m._noPrice<0.20){sigs.push({name:'NO Cheap',val:'$'+m._noPrice.toFixed(2),cls:'up'});score+=12;}
+    // S3: Liquidity
+    if(m._liq<500){sigs.push({name:'Thin Liq',val:fmtUSD(m._liq),cls:'warn'});score+=5;}
+    else if(m._liq>10000){sigs.push({name:'Deep Liq',val:fmtUSD(m._liq),cls:'up'});score+=8;}
+    // S4: Time Decay
+    if(p.date){
+      var eventDate=new Date(p.date+'T12:00:00');var daysOut=Math.max(0,Math.round((eventDate-Date.now())/(86400000)));
+      m._daysOut=daysOut;
+      if(daysOut<=2){sigs.push({name:'Imminent',val:daysOut+'d',cls:'up'});score+=15;}
+      else if(daysOut<=5){sigs.push({name:'Soon',val:daysOut+'d',cls:'warn'});score+=8;}
+      else{sigs.push({name:'Far Out',val:daysOut+'d',cls:'dn'});score+=2;}
+    }
+    // S5: Market Confidence
+    var confidence=Math.abs(m._yesPrice-0.5)*200;
+    if(confidence>60){sigs.push({name:'High Conv',val:Math.round(confidence)+'%',cls:'up'});score+=10;}
+    else if(confidence<20){sigs.push({name:'Uncertain',val:Math.round(confidence)+'%',cls:'warn'});score+=6;}
+    // S6: Solar Radiation (satellite-derived) — high radiation = warmer temps
+    if(m._sat&&m._sat.solarRad!==null){
+      if(m._sat.solarRad>20){sigs.push({name:'\u2600 Hi Solar',val:m._sat.solarRad.toFixed(1)+' MJ/m\u00b2',cls:'up'});score+=8;}
+      else if(m._sat.solarRad<8){sigs.push({name:'\u2601 Lo Solar',val:m._sat.solarRad.toFixed(1)+' MJ/m\u00b2',cls:'dn'});score+=6;}
+    }
+    // S7: Wind Chill / Apparent Temp Delta — actual vs feels-like divergence
+    if(m._sat&&m._sat.apparentMax!==null&&m._forecast){
+      var forecastHigh=p.unit==='F'?m._forecast.maxF:m._forecast.maxC;
+      var delta=Math.abs(m._sat.apparentMax-forecastHigh);
+      if(delta>8){sigs.push({name:'Feels-Like \u0394',val:(delta>0?'+':'')+delta.toFixed(0)+'\u00b0',cls:'warn'});score+=10;}
+      else if(delta>4){sigs.push({name:'Wind Chill',val:'\u0394'+delta.toFixed(0)+'\u00b0',cls:'blue'});score+=5;}
+    }
+    // S8: Climate Normal Deviation — forecast vs historical avg
+    if(m._climate&&m._forecast){
+      var fHigh=p.unit==='F'?m._forecast.maxF:m._forecast.maxC;
+      var normDev=fHigh-m._climate.avgHigh;
+      if(Math.abs(normDev)>5){
+        sigs.push({name:normDev>0?'Above Norm':'Below Norm',val:(normDev>0?'+':'')+normDev.toFixed(1)+'\u00b0',cls:normDev>0?'up':'dn'});
+        score+=12;
+      }else if(Math.abs(normDev)>2){
+        sigs.push({name:'Near Norm',val:'\u0394'+normDev.toFixed(1)+'\u00b0',cls:'blue'});score+=4;
+      }
+      // Historical volatility — if temps swing a lot on this date historically
+      if(m._climate.spread>15){sigs.push({name:'Volatile Date',val:m._climate.spread+'\u00b0 range',cls:'warn'});score+=8;}
+    }
+    // S9: NOAA Weather Alerts
+    if(m._alerts&&m._alerts.length){
+      var sev=m._alerts[0].severity;var sevCls=sev==='Extreme'||sev==='Severe'?'dn':sev==='Moderate'?'warn':'blue';
+      sigs.push({name:'\u26a0 '+m._alerts[0].event.slice(0,18),val:sev,cls:sevCls});score+=sev==='Extreme'?20:sev==='Severe'?15:8;
+    }
+    // S10: Precipitation + UV combo signal
+    if(m._sat){
+      if(m._sat.precipMm!==null&&m._sat.precipMm>5){sigs.push({name:'\u{1f327} Precip',val:m._sat.precipMm.toFixed(1)+'mm',cls:'dn'});score+=6;}
+      if(m._sat.uvIndex!==null&&m._sat.uvIndex>=8){sigs.push({name:'\u2600 Hi UV',val:m._sat.uvIndex.toFixed(0)+' idx',cls:'warn'});score+=5;}
+      if(m._sat.gustMax!==null&&m._sat.gustMax>50){sigs.push({name:'\u{1f4a8} Gusts',val:Math.round(m._sat.gustMax)+'km/h',cls:'dn'});score+=8;}
+      if(m._sat.sunshineHrs!==null){
+        if(m._sat.sunshineHrs>10){sigs.push({name:'\u2600 Sunny',val:m._sat.sunshineHrs+'h',cls:'up'});score+=5;}
+        else if(m._sat.sunshineHrs<3){sigs.push({name:'\u2601 Overcast',val:m._sat.sunshineHrs+'h sun',cls:'dn'});score+=5;}
+      }
+    }
+    m._signals=sigs;m._sigScore=score;
+  });
+
+  wxRender();lg('Found '+_wxMarkets.length+' weather markets with satellite data','ok');
+}
+
+function wxCodeToText(c){
+  if(c===0)return'Clear sky';if(c<=3)return'Partly cloudy';if(c<=48)return'Fog';
+  if(c<=57)return'Drizzle';if(c<=67)return'Rain';if(c<=77)return'Snow';
+  if(c<=82)return'Rain showers';if(c<=86)return'Snow showers';if(c>=95)return'Thunderstorm';
+  return'Mixed';
+}
+
+function wxCalcEdge(m){
+  var p=m._parsed;if(!m._forecast)return;
+  var forecastVal=p.unit==='F'?m._forecast.maxF:m._forecast.maxC;var stdDev=p.unit==='F'?4:2.2;
+  if(p.op==='>='){ var z=(forecastVal-p.threshold)/stdDev;m._impliedProb=0.5*(1+erf(z/Math.sqrt(2)));}
+  else if(p.op==='<='){ var z=(p.threshold-forecastVal)/stdDev;m._impliedProb=0.5*(1+erf(z/Math.sqrt(2)));}
+  else if(p.op==='between'&&Array.isArray(p.threshold)){var zL=(p.threshold[0]-forecastVal)/stdDev;var zH=(p.threshold[1]-forecastVal)/stdDev;m._impliedProb=0.5*(erf(zH/Math.sqrt(2))-erf(zL/Math.sqrt(2)));}
+  if(m._impliedProb!==undefined)m._edge=(m._impliedProb-m._yesPrice)*100;
+}
+
+function wxRender(){
+  var threshold=parseFloat($('wx-threshold').value)||8;
+  var signals=_wxMarkets.filter(function(m){return m._edge!=null&&m._edge>threshold});
+  $('wx-total').textContent=_wxMarkets.length;$('wx-signals').textContent=signals.length;
+  $('wx-nav-badge').textContent=signals.length||_wxMarkets.length;$('wx-count').textContent=_wxMarkets.length;
+  var edges=_wxMarkets.filter(function(m){return m._edge!=null}).map(function(m){return m._edge});
+  $('wx-edge').textContent=edges.length?(edges.reduce(function(a,b){return a+b},0)/edges.length).toFixed(1)+'%':'--';
+  var wxT=_acc.weather.wins+_acc.weather.losses;$('wx-acc').textContent=wxT>0?Math.round(_acc.weather.wins/wxT*100)+'%':'--';
+
+  var wxSort=$('wx-sort').value;
+  var sorted=_wxMarkets.slice();
+  if(wxSort==='edge')sorted.sort(function(a,b){return(b._edge||0)-(a._edge||0)});
+  else if(wxSort==='score')sorted.sort(function(a,b){return(b._sigScore||0)-(a._sigScore||0)});
+  else if(wxSort==='liquidity')sorted.sort(function(a,b){return(b._liq||0)-(a._liq||0)});
+  else if(wxSort==='price')sorted.sort(function(a,b){return(a._yesPrice||1)-(b._yesPrice||1)});
+  else if(wxSort==='date')sorted.sort(function(a,b){return(a._parsed.date||'z').localeCompare(b._parsed.date||'z')});
+  var html='';
+  sorted.forEach(function(m){
+    var p=m._parsed;var url=polyUrl(m);
+    var edgeCls=m._edge!=null?(m._edge>8?'up':m._edge>0?'warn':'dn'):'blue';
+    html+='<div class="market-card"><div class="card-top"><div class="card-question">'+(p.city||'Weather')+' &mdash; '+(m.question||'').slice(0,70)+'</div>'+
+      '<a href="'+url+'" target="_blank" class="trade-link">Trade &rarr;</a></div>'+
+      '<div class="card-body">'+
+      '<div class="card-row"><span class="label">YES</span><span class="val up">$'+m._yesPrice.toFixed(3)+'</span></div>'+
+      '<div class="card-row"><span class="label">NO</span><span class="val dn">$'+m._noPrice.toFixed(3)+'</span></div>'+
+      '<div class="card-row"><span class="label">Target</span><span class="val">'+(Array.isArray(p.threshold)?p.threshold[0]+'-'+p.threshold[1]:p.threshold)+'\u00b0'+(p.unit||'?')+' '+(p.op||'')+'</span></div>'+
+      '<div class="card-row"><span class="label">Date</span><span class="val">'+(p.date||'?')+'</span></div>'+
+      '<div class="card-row"><span class="label">Liquidity</span><span class="val blue">'+fmtUSD(m._liq)+'</span></div>';
+    // NOAA alerts banner
+    if(m._alerts&&m._alerts.length){
+      html+='<div style="margin:6px 0;padding:6px 10px;background:var(--dn-bg);border:1px solid var(--dn-border);border-radius:var(--radius-xs);font-size:11px;color:var(--dn)">';
+      m._alerts.forEach(function(a){html+='\u26a0\ufe0f <strong>'+a.event+'</strong> ('+a.severity+') '+a.headline.slice(0,60)+'<br>';});
+      html+='</div>';
+    }
+    // Market + satellite signals
+    if(m._signals&&m._signals.length){
+      html+='<div class="card-divider"></div><div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">';
+      m._signals.forEach(function(s){html+='<span class="chip '+s.cls+'" style="font-size:9px">'+s.name+': '+s.val+'</span>';});
+      html+='</div>';
+    }
+    // Forecast + satellite atmospheric data
+    if(m._forecast){
+      html+='<div class="card-divider"></div>'+
+        '<div class="forecast-box">'+
+        '<div class="card-row"><span class="label">Forecast High <span style="color:var(--t4);font-size:9px">('+(m._forecast.src||'API')+')</span></span><span class="val purple">'+(p.unit==='F'?m._forecast.maxF+'\u00b0F':m._forecast.maxC+'\u00b0C')+'</span></div>'+
+        '<div class="card-row"><span class="label">Forecast Low</span><span class="val blue">'+(p.unit==='F'?m._forecast.minF+'\u00b0F':m._forecast.minC+'\u00b0C')+'</span></div>'+
+        '<div class="card-row"><span class="label">Condition</span><span class="val">'+m._forecast.condition+'</span></div>';
+      // Satellite atmospheric data
+      if(m._sat){
+        if(m._sat.apparentMax!==null)html+='<div class="card-row"><span class="label">Feels Like</span><span class="val">'+(m._sat.apparentMax!==null?Math.round(m._sat.apparentMax)+'\u00b0':'--')+' / '+(m._sat.apparentMin!==null?Math.round(m._sat.apparentMin)+'\u00b0':'--')+'</span></div>';
+        if(m._sat.windMax!==null)html+='<div class="card-row"><span class="label">Wind / Gusts</span><span class="val">'+Math.round(m._sat.windMax)+' / '+(m._sat.gustMax?Math.round(m._sat.gustMax):'-')+' km/h</span></div>';
+        if(m._sat.solarRad!==null)html+='<div class="card-row"><span class="label">\u2600 Solar Rad</span><span class="val">'+m._sat.solarRad.toFixed(1)+' MJ/m\u00b2</span></div>';
+        if(m._sat.sunshineHrs!==null)html+='<div class="card-row"><span class="label">Sunshine</span><span class="val">'+m._sat.sunshineHrs+'h</span></div>';
+        if(m._sat.uvIndex!==null)html+='<div class="card-row"><span class="label">UV Index</span><span class="val">'+(m._sat.uvIndex>=8?'<span style="color:var(--dn)">':m._sat.uvIndex>=5?'<span style="color:var(--warn)">':'<span>')+m._sat.uvIndex.toFixed(1)+'</span></span></div>';
+        if(m._forecast.rain!==null)html+='<div class="card-row"><span class="label">\u{1f327} Rain Prob</span><span class="val">'+(m._forecast.rain>50?'<span style="color:var(--dn)">':m._forecast.rain>20?'<span style="color:var(--warn)">':'<span>')+m._forecast.rain+'%</span></span></div>';
+      }
+      // Climate normal comparison
+      if(m._climate){
+        html+='<div class="card-divider"></div>'+
+          '<div class="card-row"><span class="label">\u{1f4ca} '+m._climate.years+'yr Avg High</span><span class="val">'+m._climate.avgHigh+'\u00b0</span></div>'+
+          '<div class="card-row"><span class="label">Historic Range</span><span class="val">'+m._climate.minHigh+'\u00b0 \u2013 '+m._climate.maxHigh+'\u00b0</span></div>';
+      }
+      html+='<div class="card-divider"></div>'+
+        '<div class="card-row"><span class="label">Implied Prob</span><span class="val purple">'+(m._impliedProb!==undefined?(m._impliedProb*100).toFixed(1)+'%':'--')+'</span></div>'+
+        '<div class="card-row"><span class="label">Edge</span><span class="val '+edgeCls+'">'+(m._edge!=null?fmtPct(m._edge):'--')+'</span></div>'+
+        '<div class="edge-meter"><div class="edge-fill" style="width:'+Math.min(Math.abs(m._edge||0)*3,100)+'%;background:var(--'+(m._edge>0?'up':'dn')+')"></div></div>'+
+        '</div>';
+    }else{
+      html+='<div style="margin-top:8px;padding:8px 10px;background:var(--bg1);border-radius:var(--radius-xs);font-size:11px;color:var(--t4)">No forecast data \u2014 signals above are market-based</div>';
+    }
+    // Clear signal recommendation
+    var sigLabel='',sigCls='neutral';
+    if(m._edge!=null){
+      if(m._edge>8){sigLabel='\u2705 BUY YES \u2014 '+fmtPct(m._edge)+' edge vs market';sigCls='up';}
+      else if(m._edge<-8){sigLabel='\u2705 BUY NO \u2014 '+fmtPct(-m._edge)+' edge vs market';sigCls='dn';}
+      else if(m._edge>3){sigLabel='\u{1f7e1} LEAN YES \u2014 small '+fmtPct(m._edge)+' edge';sigCls='neutral';}
+      else if(m._edge<-3){sigLabel='\u{1f7e1} LEAN NO \u2014 small '+fmtPct(-m._edge)+' edge';sigCls='neutral';}
+      else{sigLabel='\u26aa NO EDGE \u2014 fairly priced';sigCls='neutral';}
+    }else{
+      // Use market-based signals when no forecast
+      var ss=m._sigScore||0;
+      if(m._yesPrice<0.20&&m._daysOut!==undefined&&m._daysOut<=3){sigLabel='\u2705 BUY YES \u2014 cheap ($'+m._yesPrice.toFixed(2)+') + imminent';sigCls='up';}
+      else if(m._noPrice<0.20&&m._daysOut!==undefined&&m._daysOut<=3){sigLabel='\u2705 BUY NO \u2014 cheap ($'+m._noPrice.toFixed(2)+') + imminent';sigCls='dn';}
+      else if(m._yesPrice<0.30){sigLabel='\u{1f535} YES looks cheap ($'+m._yesPrice.toFixed(2)+') \u2014 '+m._signals.length+' signals';sigCls='neutral';}
+      else if(m._noPrice<0.30){sigLabel='\u{1f535} NO looks cheap ($'+m._noPrice.toFixed(2)+') \u2014 '+m._signals.length+' signals';sigCls='neutral';}
+      else if(ss>=25){sigLabel='\u{1f7e2} OPPORTUNITY \u2014 '+(m._signals||[]).length+' signals, score '+ss;sigCls='up';}
+      else if(ss>=15){sigLabel='\u{1f7e1} WATCH \u2014 '+(m._signals||[]).length+' signals, score '+ss;sigCls='neutral';}
+      else{sigLabel='\u26aa '+(m._signals||[]).length+' signals \u2014 score '+ss;sigCls='neutral';}
+    }
+    html+='</div><div class="card-signal"><span class="signal-dir '+sigCls+'">'+sigLabel+'</span></div></div>';
+  });
+  $('wx-grid').innerHTML=html||'<div class="empty"><div class="empty-icon">\u{1f326}</div>No weather markets found.</div>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// ARBITRAGE SCANNER
+// ═══════════════════════════════════════════════════════════
+var _arbOpps=[];var _strOpps=[];var _arbScans=0;var _arbTotal=0;
+
+async function arbScan(){
+  lg('Scanning for arbitrage...');_arbScans++;
+  var allMarkets=[];
+  for(var off=0;off<1000;off+=100){
+    try{var r=await fetch(_GAMMA+'/markets?limit=100&active=true&closed=false&offset='+off+'&order=liquidity&ascending=false');var d=await r.json();if(!d.length)break;allMarkets=allMarkets.concat(d);}catch(e){break;}
+  }
+  _arbTotal=allMarkets.length;lg('Scanned '+allMarkets.length+' markets');
+  _arbOpps=[];_strOpps=[];var FEE=0.02;
+
+  allMarkets.forEach(function(m){
+    var prices=JSON.parse(m.outcomePrices||'[]');if(prices.length<2)return;
+    var yes=parseFloat(prices[0]);var no=parseFloat(prices[1]);var liq=parseFloat(m.liquidity||'0');
+    // Extract correct event slug from Gamma API events array
+    var evSlug=(m.events&&m.events[0])?m.events[0].slug:(m.eventSlug||m.slug||'');
+    var costBoth=yes+no+FEE;
+    if(costBoth<1.0){
+      var profit=1.0-costBoth;
+      _arbOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:evSlug,_eventSlug:evSlug,yes:yes,no:no,profit:profit,profitPct:profit/(yes+no)*100,liq:liq});
+    }
+    if(yes>=0.55&&yes<=0.80&&liq>100){
+      var mc=0.8*yes,hc=0.2*no,tc=mc+hc+FEE/2;var ev=yes*0.8+(1-yes)*0.2-tc;
+      if(ev>0.01)_strOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:evSlug,_eventSlug:evSlug,yes:yes,no:no,mainSide:'YES',ev:ev,evPct:ev/tc*100,cost:tc,liq:liq});
+    }
+    if(no>=0.55&&no<=0.80&&liq>100){
+      var mc2=0.8*no,hc2=0.2*yes,tc2=mc2+hc2+FEE/2;var ev2=no*0.8+(1-no)*0.2-tc2;
+      if(ev2>0.01)_strOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:evSlug,_eventSlug:evSlug,yes:yes,no:no,mainSide:'NO',ev:ev2,evPct:ev2/tc2*100,cost:tc2,liq:liq});
+    }
+  });
+  var sortBy=$('arb-sort').value;
+  if(sortBy==='edge'){_arbOpps.sort(function(a,b){return b.profitPct-a.profitPct});_strOpps.sort(function(a,b){return b.evPct-a.evPct});}
+  else{_arbOpps.sort(function(a,b){return b.liq-a.liq});_strOpps.sort(function(a,b){return b.liq-a.liq});}
+  arbRender();lg('Found '+_arbOpps.length+' arb + '+_strOpps.length+' straddle','ok');
+}
+
+function arbRender(){
+  var sortBy=$('arb-sort').value;
+  if(sortBy==='edge'){_arbOpps.sort(function(a,b){return b.profitPct-a.profitPct});_strOpps.sort(function(a,b){return b.evPct-a.evPct});}
+  else{_arbOpps.sort(function(a,b){return b.liq-a.liq});_strOpps.sort(function(a,b){return b.liq-a.liq});}
+  $('arb-scanned').textContent=_arbTotal||'--';$('arb-opps').textContent=_arbOpps.length;
+  $('arb-straddles').textContent=_strOpps.length;
+  $('arb-best').textContent=_arbOpps.length?fmtPct(_arbOpps[0].profitPct):(_strOpps.length?fmtPct(_strOpps[0].evPct):'--');
+  $('arb-nav-badge').textContent=_arbOpps.length+_strOpps.length;$('arb-count').textContent=_arbOpps.length;$('str-count').textContent=_strOpps.length;
+
+  var ah='';
+  _arbOpps.slice(0,20).forEach(function(a){
+    var url=polyUrl(a);
+    ah+='<div class="market-card"><div class="card-top"><div class="card-question">'+a.question.slice(0,70)+'</div>'+
+      '<a href="'+url+'" target="_blank" class="trade-link">Trade &rarr;</a></div>'+
+      '<div class="card-body">'+
+      '<div class="card-row"><span class="label">Buy YES</span><span class="val up">$'+a.yes.toFixed(4)+'</span></div>'+
+      '<div class="card-row"><span class="label">Buy NO</span><span class="val dn">$'+a.no.toFixed(4)+'</span></div>'+
+      '<div class="card-row"><span class="label">Total Cost</span><span class="val">$'+(a.yes+a.no).toFixed(4)+'</span></div>'+
+      '<div class="card-row"><span class="label">Payout</span><span class="val up">$1.00</span></div>'+
+      '<div class="card-row"><span class="label">Liquidity</span><span class="val blue">'+fmtUSD(a.liq)+'</span></div>'+
+      '</div><div class="card-signal"><div class="arb-hero" style="width:100%"><div class="pct" style="color:var(--up)">'+fmtPct(a.profitPct)+'</div><div class="label" style="color:var(--up)">Guaranteed Profit (after ~2% fees)</div></div></div></div>';
+  });
+  $('arb-grid').innerHTML=ah||'<div class="empty"><div class="empty-icon">\u2705</div>No arb found. Markets efficiently priced.</div>';
+
+  var sh='';
+  _strOpps.slice(0,20).forEach(function(s){
+    var url=polyUrl(s);
+    sh+='<div class="market-card"><div class="card-top"><div class="card-question">'+s.question.slice(0,70)+'</div>'+
+      '<a href="'+url+'" target="_blank" class="trade-link">Trade &rarr;</a></div>'+
+      '<div class="card-body">'+
+      '<div class="card-row"><span class="label">YES</span><span class="val up">$'+s.yes.toFixed(3)+'</span></div>'+
+      '<div class="card-row"><span class="label">NO</span><span class="val dn">$'+s.no.toFixed(3)+'</span></div>'+
+      '<div class="card-row"><span class="label">Strategy</span><span class="val">80% '+s.mainSide+' + 20% hedge</span></div>'+
+      '<div class="card-row"><span class="label">Cost</span><span class="val">$'+s.cost.toFixed(3)+'</span></div>'+
+      '<div class="card-row"><span class="label">Liquidity</span><span class="val blue">'+fmtUSD(s.liq)+'</span></div>'+
+      '</div><div class="card-signal"><div class="arb-hero" style="width:100%"><div class="pct" style="color:var(--gold)">'+fmtPct(s.evPct)+' EV</div><div class="label" style="color:var(--gold)">Straddle (80/20 hedged)</div></div></div></div>';
+  });
+  $('str-grid').innerHTML=sh||'<div class="empty"><div class="empty-icon">\u{1f3b0}</div>No straddle opportunities above threshold.</div>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// CRYPTO 5-MINUTE
+// ═══════════════════════════════════════════════════════════
+var _crMkts=[];var _crPreds={};var _crScans=0;
+
+function calcEMA(d,p){var k=2/(p+1);var e=[d[0]];for(var i=1;i<d.length;i++)e.push(d[i]*k+e[i-1]*(1-k));return e;}
+function calcRSI(d,p){var g=[],l=[];for(var i=1;i<d.length;i++){var df=d[i]-d[i-1];g.push(df>0?df:0);l.push(df<0?-df:0);}if(g.length<p)return[];var ag=0,al=0;for(var i=0;i<p;i++){ag+=g[i];al+=l[i];}ag/=p;al/=p;var r=[100-100/(1+ag/(al||1e-4))];for(var i=p;i<g.length;i++){ag=(ag*(p-1)+g[i])/p;al=(al*(p-1)+l[i])/p;r.push(100-100/(1+ag/(al||1e-4)));}return r;}
+
+async function crScan(){
+  lg('Scanning 5-min crypto...');_crScans++;
+  var now=Math.floor(Date.now()/1000);var ts=Math.ceil(now/300)*300;
+  var assets=['btc','eth','sol','xrp'];var markets=[];
+  var fetches=assets.map(function(a){
+    return fetch(_GAMMA+'/events/slug/'+a+'-updown-5m-'+ts).then(function(r){return r.ok?r.json():null}).then(function(ev){
+      if(ev&&ev.markets&&ev.markets[0]&&!ev.markets[0].closed){var m=ev.markets[0];m._asset=a.toUpperCase();m._windowTs=ts;m._endMs=ts*1000;m._eventSlug=ev.slug||a+'-updown-5m-'+ts;m.question=m.question||ev.title;markets.push(m);}
+    }).catch(function(){});
+  });
+  await Promise.all(fetches);
+
+  for(var i=0;i<markets.length;i++){
+    var m=markets[i];var tids=JSON.parse(m.clobTokenIds||'[]');
+    if(!tids[0]){m._analysis={score:0,dir:'neutral',sigs:0};continue;}
+    try{
+      var cbPair=m._asset==='XRP'?'XRP-USD':m._asset+'-USD';
+      var r=await Promise.all([
+        fetch(_CLOB+'/price?token_id='+tids[0]+'&side=buy').then(function(x){return x.json()}).catch(function(){return null}),
+        fetch(_CLOB+'/price?token_id='+tids[1]+'&side=buy').then(function(x){return x.json()}).catch(function(){return null}),
+        fetch(_CLOB+'/midpoint?token_id='+tids[0]).then(function(x){return x.json()}).catch(function(){return null}),
+        fetch(_COINBASE+'/v2/prices/'+cbPair+'/spot').then(function(x){return x.json()}).catch(function(){return null}),
+        fetch(_EXCHANGE+'/products/'+cbPair+'/candles?granularity=300').then(function(x){return x.json()}).catch(function(){return null})
+      ]);
+      var yP=parseFloat((r[0]&&r[0].price)||'0.5');var nP=parseFloat((r[1]&&r[1].price)||'0.5');
+      var mid=parseFloat((r[2]&&r[2].mid)||'0.5');var spot=r[3]&&r[3].data?parseFloat(r[3].data.amount):null;
+      var candles=r[4]&&Array.isArray(r[4])?r[4].slice(0,20):null;
+      var score=0;var sigs=0;
+      var dev=yP-0.5;if(Math.abs(dev)>0.003){score+=dev*80;sigs++;}
+      var md=mid-0.5;if(Math.abs(md)>0.003){score+=md*40;sigs++;}
+      if(candles&&candles.length>=2){
+        var pct=((candles[0][4]-candles[0][3])/candles[0][3])*100;if(Math.abs(pct)>0.01){score+=pct>0?10:-10;sigs++;}
+        var closes=candles.slice().reverse().map(function(c){return c[4]});
+        if(closes.length>=16){var rsi=calcRSI(closes,14);if(rsi.length){var rv=rsi[rsi.length-1];if(rv<30){score+=8;sigs++;}else if(rv>70){score-=8;sigs++;}}}
+        if(closes.length>=22){var e9=calcEMA(closes,9);var e21=calcEMA(closes,21);if(e9[e9.length-1]>e21[e21.length-1]){score+=6;sigs++;}else{score-=6;sigs++;}}
+      }
+      var dir=score>3?'up':score<-3?'down':'neutral';
+      m._analysis={score:Math.round(score*10)/10,dir:dir,sigs:sigs,yP:yP,nP:nP,spot:spot};
+    }catch(e){m._analysis={score:0,dir:'neutral',sigs:0};}
+  }
+  _crMkts=markets;crRender();lg('Crypto: '+markets.length+' markets','ok');
+}
+
+function crRender(){
+  var f=_crMkts.slice();var filter=$('cr-asset').value;
+  if(filter!=='ALL')f=f.filter(function(m){return m._asset===filter});
+  var crSort=$('cr-sort').value;
+  if(crSort==='score')f.sort(function(a,b){return Math.abs(b._analysis?b._analysis.score:0)-Math.abs(a._analysis?a._analysis.score:0)});
+  else if(crSort==='asset')f.sort(function(a,b){return(a._asset||'').localeCompare(b._asset||'')});
+  else if(crSort==='price')f.sort(function(a,b){return(a._analysis?a._analysis.yP:0.5)-(b._analysis?b._analysis.yP:0.5)});
+  $('cr-act').textContent=f.length;
+  $('cr-str').textContent=f.filter(function(m){return m._analysis&&Math.abs(m._analysis.score)>5}).length;
+  $('cr-nav-badge').textContent=f.length;
+  var crT=_acc.crypto.wins+_acc.crypto.losses;$('cr-acc').textContent=crT>0?Math.round(_acc.crypto.wins/crT*100)+'%':'--';
+  var endMs=f[0]?f[0]._endMs:0;
+  if(endMs){var df=endMs-Date.now();var s=Math.max(0,Math.floor(df/1000));$('cr-win').textContent=Math.floor(s/60)+'m '+(s%60)+'s';}
+
+  var html='';
+  f.forEach(function(m){
+    var a=m._analysis||{};var d=a.dir||'neutral';
+    var dirCls=d==='up'?'up':d==='down'?'dn':'neutral';
+    var arrow=d==='up'?'\u25B2':d==='down'?'\u25BC':'\u25CF';
+    var url=polyUrl(m);
+    html+='<div class="market-card"><div class="card-top"><div class="card-question"><span style="font-size:16px;font-weight:800">'+m._asset+'</span> <span class="chip blue" style="font-size:9px">5 MIN</span></div>'+
+      '<a href="'+url+'" target="_blank" class="trade-link">Trade &rarr;</a></div>'+
+      '<div class="card-body">'+
+      '<div style="font-size:11px;color:var(--t3);margin-bottom:6px">'+(m.question||'').slice(0,60)+'</div>'+
+      '<div class="card-row"><span class="label">UP (YES)</span><span class="val up">$'+(a.yP||0.5).toFixed(3)+'</span></div>'+
+      '<div class="card-row"><span class="label">DOWN (NO)</span><span class="val dn">$'+(a.nP||0.5).toFixed(3)+'</span></div>'+
+      (a.spot?'<div class="card-row"><span class="label">'+m._asset+' Spot</span><span class="val blue">$'+a.spot.toFixed(2)+'</span></div>':'')+
+      '</div>'+
+      '<div class="card-signal"><span class="signal-dir '+dirCls+'">'+arrow+' '+d.toUpperCase()+'</span>'+
+      '<span class="signal-score" style="color:var(--'+(d==='up'?'up':d==='down'?'dn':'warn')+')">'+(a.score>0?'+':'')+a.score+'</span>'+
+      '<span class="signal-meta">'+a.sigs+' signals</span></div></div>';
+  });
+  $('cr-grid').innerHTML=html||'<div class="empty"><div class="empty-icon">\u26a1</div>No active 5-min markets found.</div>';
+}
+
+// Countdown timer
+setInterval(function(){if(!_crMkts.length)return;var e=_crMkts[0]._endMs||0;if(!e)return;var d=e-Date.now();if(d<=0){crScan();return;}var s=Math.floor(d/1000);$('cr-win').textContent=Math.floor(s/60)+'m '+(s%60)+'s';},1000);
+
+// ═══════════════════════════════════════════════════════════
+// ACCURACY DASHBOARD
+// ═══════════════════════════════════════════════════════════
+function accRender(){
+  var features=[
+    {name:'Smart Money',key:'smartMoney',target:60,color:'var(--gold)'},
+    {name:'Weather',key:'weather',target:70,color:'var(--purple)'},
+    {name:'Arbitrage',key:'arb',target:95,color:'var(--up)'},
+    {name:'Crypto 5M',key:'crypto',target:55,color:'var(--blue)'}
+  ];
+  var html='';
+  features.forEach(function(f){
+    var a=_acc[f.key];var total=a.wins+a.losses;var pct=total>0?Math.round(a.wins/total*100):0;
+    var cls=total<10?'warn':pct>=f.target?'up':pct>=50?'warn':'dn';
+    var barW=total>0?pct:0;
+    html+='<div class="acc-card" style="border-top:3px solid '+f.color+'">'+
+      '<div class="acc-name">'+f.name+'</div>'+
+      '<div class="acc-pct" style="color:var(--'+cls+')">'+pct+'%</div>'+
+      '<div class="acc-target">Target: '+f.target+'%</div>'+
+      '<div class="acc-detail">'+a.wins+'W / '+a.losses+'L'+(a.pending?' / '+a.pending+'P':'')+' ('+total+' total)</div>'+
+      '<div class="acc-bar"><div class="acc-fill" style="width:'+barW+'%;background:'+f.color+'"></div></div>'+
+      (total<10?'<div style="font-size:10px;color:var(--warn);margin-top:6px">Need '+(10-total)+' more for reliable data</div>':'')+
+      '</div>';
+  });
+  $('acc-panel').innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════════════
+// STARTUP
+// ═══════════════════════════════════════════════════════════
+lg('PolyBot \u2014 Multi-Strategy Dashboard');
+lg(_onPoly?'Mode: Direct (polymarket.com)':'Mode: Proxy ('+location.hostname+')');
+$('conn-text').textContent=_onPoly?'Direct mode':'Proxy: '+location.hostname;
+$('conn-dot').classList.add(_onPoly?'':'off');
+
+smFetchTrades();
+crScan();
+accRender();
+setInterval(crScan,30000);
+setInterval(accRender,10000);
+</script>
 </body>
 </html>
