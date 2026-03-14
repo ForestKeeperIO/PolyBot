@@ -274,7 +274,7 @@ select:focus,.input:focus{border-color:var(--blue);outline:none}
       </div>
       <div class="controls">
         <button class="btn btn-primary" id="wx-refresh" onclick="wxScan()">&#x1f50d; Scan Markets</button>
-        <input type="text" class="input" id="wx-apikey" placeholder="WeatherAPI.com key (optional)">
+        <input type="text" class="input" id="wx-apikey" value="328393c14f3545a38c144740261403" placeholder="WeatherAPI.com key (optional)">
         <select id="wx-threshold" onchange="wxRender()"><option value="8">Min 8% edge</option><option value="5">Min 5% edge</option><option value="10">Min 10% edge</option><option value="15">Min 15% edge</option></select>
         <select id="wx-sort" onchange="wxRender()"><option value="edge">Sort: Highest Edge</option><option value="liquidity">Sort: Liquidity</option><option value="price">Sort: Cheapest YES</option><option value="date">Sort: Soonest Date</option></select>
       </div>
