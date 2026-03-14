@@ -349,13 +349,54 @@ var _DATA='https://data-api.polymarket.com';
 var _COINBASE=_onPoly?'https://api.coinbase.com':'/api/coinbase';
 var _EXCHANGE=_onPoly?'https://api.exchange.coinbase.com':'/api/exchange';
 
-// ── Accuracy Store ──
+// ── Accuracy Store (loaded from localStorage) ──
 var _acc={
   smartMoney:{wins:0,losses:0,pending:0,log:[]},
   weather:{wins:0,losses:0,pending:0,log:[]},
   arb:{wins:0,losses:0,pending:0,log:[]},
   crypto:{wins:0,losses:0,neutral:0,log:[]}
 };
+// ── Prediction Tracker (persisted to localStorage) ──
+var _predictions=[];
+function loadPredictions(){try{var s=localStorage.getItem('polybot_preds');if(s)_predictions=JSON.parse(s);var a=localStorage.getItem('polybot_acc');if(a)_acc=JSON.parse(a);}catch(e){}}
+function savePredictions(){try{localStorage.setItem('polybot_preds',JSON.stringify(_predictions.slice(-200)));localStorage.setItem('polybot_acc',JSON.stringify(_acc));}catch(e){}}
+function recordPrediction(strategy,slug,dir,price,confidence,conditionId){
+  _predictions.push({strategy:strategy,slug:slug,dir:dir,price:price,confidence:confidence,conditionId:conditionId||'',ts:Date.now(),resolved:false,outcome:null});
+  _acc[strategy].pending++;savePredictions();
+}
+// Check resolved markets and update accuracy
+async function checkOutcomes(){
+  var pending=_predictions.filter(function(p){return!p.resolved&&p.conditionId});
+  if(!pending.length)return;
+  lg('Checking '+pending.length+' pending predictions...');
+  var checked=0;
+  for(var i=0;i<Math.min(pending.length,20);i++){
+    var p=pending[i];
+    // Skip if less than 5 min old
+    if(Date.now()-p.ts<300000)continue;
+    try{
+      var r=await fetch(_GAMMA+'/markets?slug='+encodeURIComponent(p.slug)+'&limit=1');
+      var d=await r.json();
+      if(d&&d[0]&&d[0].closed){
+        var prices=JSON.parse(d[0].outcomePrices||'[]');
+        var yesWon=parseFloat(prices[0]||0)>0.95;
+        var noWon=parseFloat(prices[1]||0)>0.95;
+        if(yesWon||noWon){
+          p.resolved=true;
+          var correct=(p.dir==='up'&&yesWon)||(p.dir==='down'&&noWon)||(p.dir==='yes'&&yesWon)||(p.dir==='no'&&noWon);
+          p.outcome=correct?'win':'loss';
+          _acc[p.strategy].pending=Math.max(0,_acc[p.strategy].pending-1);
+          if(correct)_acc[p.strategy].wins++;else _acc[p.strategy].losses++;
+          _acc[p.strategy].log.push({ts:Date.now(),slug:p.slug,dir:p.dir,outcome:p.outcome,confidence:p.confidence});
+          if(_acc[p.strategy].log.length>50)_acc[p.strategy].log.shift();
+          checked++;lg(p.strategy+' prediction '+p.slug.slice(0,30)+': '+p.outcome,'ok');
+        }
+      }
+    }catch(e){}
+  }
+  if(checked)savePredictions();
+}
+loadPredictions();
 
 // ── Utilities ──
 function $(id){return document.getElementById(id)}
@@ -499,15 +540,44 @@ async function smFetchTrades(){
   allTrades.sort(function(a,b){return(b.timestamp||0)-(a.timestamp||0)});
   _smFeed=allTrades.slice(0,100);
   _smConsensus={};
+  var nowSec=Math.floor(Date.now()/1000);
   allTrades.forEach(function(tr){
     var key=tr.eventSlug||tr.slug||tr.conditionId;if(!key)return;
-    // For the URL slug, prefer eventSlug (Data API gives correct event slug), fall back to slug, then lookup conditionId
     var urlSlug=tr.eventSlug||tr.slug||(tr.conditionId&&_cidToSlug[tr.conditionId])||'';
-    if(!_smConsensus[key])_smConsensus[key]={title:tr.title||'Unknown',buys:0,sells:0,totalSize:0,traders:[],slug:urlSlug};
-    if(tr.side==='BUY')_smConsensus[key].buys++;else _smConsensus[key].sells++;
-    _smConsensus[key].totalSize+=parseFloat(tr.size||0);
-    var tName=tr._trader?tr._trader.name:'anon';
-    if(_smConsensus[key].traders.indexOf(tName)===-1)_smConsensus[key].traders.push(tName);
+    if(!_smConsensus[key])_smConsensus[key]={title:tr.title||'Unknown',buys:0,sells:0,totalSize:0,traders:[],slug:urlSlug,weightedScore:0,traderDetails:[],conditionId:tr.conditionId||''};
+    var t=tr._trader||{roi:0,pnl:0,archetype:'grinder'};
+    // Recency decay: trades from 1h ago = 1.0, 6h = 0.5, 24h = 0.2, 72h = 0.05
+    var ageH=Math.max(0,(nowSec-(tr.timestamp||nowSec))/3600);
+    var recency=Math.exp(-0.12*ageH); // half-life ~5.8 hours
+    // Quality weight: snipers 3x, sharps 2x, grinders 1x
+    var qualW=t.archetype==='sniper'?3:t.archetype==='sharp'?2:1;
+    // Size weight: bigger trades = more conviction
+    var sz=parseFloat(tr.size||0);var sizeW=sz>1000?2:sz>200?1.5:1;
+    var w=recency*qualW*sizeW;
+    if(tr.side==='BUY'){_smConsensus[key].buys++;_smConsensus[key].weightedScore+=w;}
+    else{_smConsensus[key].sells++;_smConsensus[key].weightedScore-=w;}
+    _smConsensus[key].totalSize+=sz;
+    var tName=t.name||'anon';
+    if(!_smConsensus[key].traderDetails.some(function(d){return d.name===tName})){
+      _smConsensus[key].traders.push(tName);
+      _smConsensus[key].traderDetails.push({name:tName,archetype:t.archetype,roi:t.roi,side:tr.side,weight:w});
+    }
+  });
+  // Calculate confidence for each consensus
+  Object.values(_smConsensus).forEach(function(c){
+    var total=c.buys+c.sells;if(!total)return;
+    var snipers=c.traderDetails.filter(function(d){return d.archetype==='sniper'}).length;
+    var sharps=c.traderDetails.filter(function(d){return d.archetype==='sharp'}).length;
+    var agreement=Math.max(c.buys,c.sells)/total;
+    // Confidence: based on whale count, agreement ratio, trader quality
+    c.confidence=Math.min(95,Math.round(
+      (c.traders.length>=5?30:c.traders.length>=3?20:c.traders.length>=2?10:5)+
+      (agreement*40)+
+      (snipers*10+sharps*5)+
+      (c.totalSize>5000?15:c.totalSize>1000?10:c.totalSize>200?5:0)
+    ));
+    c.strength=c.confidence>=70?'STRONG':c.confidence>=45?'MODERATE':'WEAK';
+    c.dir=c.weightedScore>0?'BUY YES':'BUY NO';
   });
   smRender();
   lg('Smart money: '+_smFeed.length+' live trades, '+Object.keys(_smConsensus).length+' active markets','ok');
@@ -535,13 +605,23 @@ function smRender(){
   else consArr.sort(function(a,b){return b.traders.length-a.traders.length});
   var ch='';
   consArr.slice(0,12).forEach(function(c){
-    var cls=c.buys>c.sells?'up':c.sells>c.buys?'dn':'warn';
+    var cls=c.weightedScore>0?'up':c.weightedScore<0?'dn':'warn';
     var url=polyUrl({_eventSlug:c.slug,eventSlug:c.slug});
-    var buySignal=c.buys>c.sells?'BUY YES':'BUY NO';var ratio=Math.max(c.buys,c.sells)/(c.buys+c.sells)*100;
+    var signal=c.dir||'BUY YES';var ratio=Math.max(c.buys,c.sells)/(c.buys+c.sells)*100;
+    var confCls=c.confidence>=70?'up':c.confidence>=45?'warn':'dn';
+    var sniperCt=c.traderDetails?c.traderDetails.filter(function(d){return d.archetype==='sniper'}).length:0;
     ch+='<div class="consensus-card"><div class="consensus-title"><a href="'+url+'" target="_blank">'+c.title.slice(0,55)+'</a></div>'+
-      '<div class="consensus-meta"><span class="chip '+cls+'">'+c.traders.length+' whales \u2192 '+buySignal+' ('+Math.round(ratio)+'%)</span>'+
+      '<div class="consensus-meta"><span class="chip '+cls+'">'+c.traders.length+' whales \u2192 '+signal+' ('+Math.round(ratio)+'%)</span>'+
+      '<span class="chip '+confCls+'" style="font-size:9px">'+(c.strength||'WEAK')+' '+c.confidence+'%</span>'+
+      (sniperCt?'<span style="color:var(--gold);font-size:9px">\u2b50'+sniperCt+' sniper'+(sniperCt>1?'s':'')+'</span>':'')+
       '<span style="color:var(--t4);font-size:10px">'+fmtUSD(c.totalSize)+' vol</span>'+
       '<a href="'+url+'" target="_blank" class="trade-link" style="font-size:9px;padding:2px 8px">Trade</a></div></div>';
+    // Record strong consensus predictions
+    if(c.confidence>=60&&c.traders.length>=3){
+      var predDir=c.weightedScore>0?'yes':'no';
+      var exists=_predictions.some(function(p){return p.slug===c.slug&&p.strategy==='smartMoney'&&Date.now()-p.ts<3600000});
+      if(!exists)recordPrediction('smartMoney',c.slug,predDir,0,c.confidence,c.conditionId);
+    }
   });
   $('sm-consensus').innerHTML=ch||'<div class="empty">No consensus data yet.</div>';
 
@@ -705,6 +785,14 @@ async function wxScan(){
   });
   await Promise.all(histProms);
 
+  // ── Recalculate edges now that climate data is available for dynamic stdDev ──
+  _wxMarkets.forEach(function(m){
+    if(m._forecast&&m._climate){
+      m._edge=null;m._impliedProb=undefined;m._confidence=undefined;
+      wxCalcEdge(m);
+    }
+  });
+
   // ── NOAA weather alerts (US cities only, free) ──
   lg('Checking NOAA alerts...');
   var alertProms=_wxMarkets.map(function(m){
@@ -800,11 +888,40 @@ function wxCodeToText(c){
 
 function wxCalcEdge(m){
   var p=m._parsed;if(!m._forecast)return;
-  var forecastVal=p.unit==='F'?m._forecast.maxF:m._forecast.maxC;var stdDev=p.unit==='F'?4:2.2;
+  var forecastVal=p.unit==='F'?m._forecast.maxF:m._forecast.maxC;
+  // DYNAMIC stdDev: use climate normals spread/2 when available (spread = max-min over 5yrs)
+  // This means Denver (spread ~30°F) gets stdDev ~15°F, Miami (spread ~8°F) gets ~4°F
+  // Fall back to fixed values only if no climate data
+  var stdDev;
+  if(m._climate&&m._climate.spread>0){
+    stdDev=Math.max(m._climate.spread/2,1.5); // spread/2 gives a reasonable sigma, min 1.5
+  }else{
+    stdDev=p.unit==='F'?4:2.2; // fallback
+  }
+  m._stdDev=stdDev; // save for display
+  // Days-out adjustment: more uncertainty further out
+  if(m._daysOut!==undefined&&m._daysOut>3){stdDev*=(1+0.05*(m._daysOut-3));}
   if(p.op==='>='){ var z=(forecastVal-p.threshold)/stdDev;m._impliedProb=0.5*(1+erf(z/Math.sqrt(2)));}
   else if(p.op==='<='){ var z=(p.threshold-forecastVal)/stdDev;m._impliedProb=0.5*(1+erf(z/Math.sqrt(2)));}
   else if(p.op==='between'&&Array.isArray(p.threshold)){var zL=(p.threshold[0]-forecastVal)/stdDev;var zH=(p.threshold[1]-forecastVal)/stdDev;m._impliedProb=0.5*(erf(zH/Math.sqrt(2))-erf(zL/Math.sqrt(2)));}
-  if(m._impliedProb!==undefined)m._edge=(m._impliedProb-m._yesPrice)*100;
+  if(m._impliedProb!==undefined){
+    m._edge=(m._impliedProb-m._yesPrice)*100;
+    // Weather confidence: based on data quality + edge magnitude + climate data availability
+    var conf=30; // base
+    if(m._climate)conf+=20; // have historical data
+    if(m._sat)conf+=15; // have satellite data
+    if(m._alerts)conf+=5; // have alert data
+    if(m._daysOut!==undefined&&m._daysOut<=3)conf+=15; // near-term = more accurate
+    else if(m._daysOut!==undefined&&m._daysOut<=7)conf+=8;
+    if(Math.abs(m._edge)>15)conf+=10; // big edge = clearer signal
+    m._confidence=Math.min(95,conf);
+    // Record weather predictions with edge > 8%
+    if(Math.abs(m._edge)>8){
+      var predDir=m._edge>0?'yes':'no';
+      var exists=_predictions.some(function(pr){return pr.slug===(m.slug||'')&&pr.strategy==='weather'&&Date.now()-pr.ts<3600000});
+      if(!exists)recordPrediction('weather',m.slug||m._eventSlug||'',predDir,m._yesPrice,m._confidence,m.conditionId);
+    }
+  }
 }
 
 function wxRender(){
@@ -872,6 +989,8 @@ function wxRender(){
       html+='<div class="card-divider"></div>'+
         '<div class="card-row"><span class="label">Implied Prob</span><span class="val purple">'+(m._impliedProb!==undefined?(m._impliedProb*100).toFixed(1)+'%':'--')+'</span></div>'+
         '<div class="card-row"><span class="label">Edge</span><span class="val '+edgeCls+'">'+(m._edge!=null?fmtPct(m._edge):'--')+'</span></div>'+
+        '<div class="card-row"><span class="label">StdDev</span><span class="val">'+(m._stdDev?m._stdDev.toFixed(1)+'\u00b0'+(m._climate?' (dynamic)':' (default)'):'--')+'</span></div>'+
+        (m._confidence?'<div class="card-row"><span class="label">Confidence</span><span class="val '+(m._confidence>=70?'up':m._confidence>=45?'warn':'dn')+'">'+m._confidence+'%</span></div>':'')+
         '<div class="edge-meter"><div class="edge-fill" style="width:'+Math.min(Math.abs(m._edge||0)*3,100)+'%;background:var(--'+(m._edge>0?'up':'dn')+')"></div></div>'+
         '</div>';
     }else{
@@ -914,24 +1033,36 @@ async function arbScan(){
   }
   _arbTotal=allMarkets.length;lg('Scanned '+allMarkets.length+' markets');
   _arbOpps=[];_strOpps=[];var FEE=0.02;
+  var MIN_LIQ=200; // minimum liquidity to avoid untradeable markets
 
   allMarkets.forEach(function(m){
     var prices=JSON.parse(m.outcomePrices||'[]');if(prices.length<2)return;
     var yes=parseFloat(prices[0]);var no=parseFloat(prices[1]);var liq=parseFloat(m.liquidity||'0');
-    // Extract correct event slug from Gamma API events array
     var evSlug=(m.events&&m.events[0])?m.events[0].slug:(m.eventSlug||m.slug||'');
-    var costBoth=yes+no+FEE;
-    if(costBoth<1.0){
+    // Slippage estimate: thin markets have worse fills
+    var slippage=liq<500?0.03:liq<2000?0.015:liq<10000?0.005:0.002;
+    var effectiveFee=FEE+slippage;
+    var costBoth=yes+no+effectiveFee;
+    if(costBoth<1.0&&liq>=MIN_LIQ){
       var profit=1.0-costBoth;
-      _arbOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:evSlug,_eventSlug:evSlug,yes:yes,no:no,profit:profit,profitPct:profit/(yes+no)*100,liq:liq});
+      var riskLevel=liq<1000?'HIGH':liq<5000?'MEDIUM':'LOW';
+      _arbOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:evSlug,_eventSlug:evSlug,yes:yes,no:no,profit:profit,profitPct:profit/(yes+no)*100,liq:liq,slippage:slippage,risk:riskLevel,conditionId:m.conditionId||''});
     }
-    if(yes>=0.55&&yes<=0.80&&liq>100){
-      var mc=0.8*yes,hc=0.2*no,tc=mc+hc+FEE/2;var ev=yes*0.8+(1-yes)*0.2-tc;
-      if(ev>0.01)_strOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:evSlug,_eventSlug:evSlug,yes:yes,no:no,mainSide:'YES',ev:ev,evPct:ev/tc*100,cost:tc,liq:liq});
+    // Straddle: require higher liquidity threshold
+    if(yes>=0.55&&yes<=0.80&&liq>500){
+      var mc=0.8*yes,hc=0.2*no,tc=mc+hc+effectiveFee/2;var ev=yes*0.8+(1-yes)*0.2-tc;
+      if(ev>0.01)_strOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:evSlug,_eventSlug:evSlug,yes:yes,no:no,mainSide:'YES',ev:ev,evPct:ev/tc*100,cost:tc,liq:liq,slippage:slippage,risk:liq<2000?'MEDIUM':'LOW',conditionId:m.conditionId||''});
     }
-    if(no>=0.55&&no<=0.80&&liq>100){
-      var mc2=0.8*no,hc2=0.2*yes,tc2=mc2+hc2+FEE/2;var ev2=no*0.8+(1-no)*0.2-tc2;
-      if(ev2>0.01)_strOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:evSlug,_eventSlug:evSlug,yes:yes,no:no,mainSide:'NO',ev:ev2,evPct:ev2/tc2*100,cost:tc2,liq:liq});
+    if(no>=0.55&&no<=0.80&&liq>500){
+      var mc2=0.8*no,hc2=0.2*yes,tc2=mc2+hc2+effectiveFee/2;var ev2=no*0.8+(1-no)*0.2-tc2;
+      if(ev2>0.01)_strOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:evSlug,_eventSlug:evSlug,yes:yes,no:no,mainSide:'NO',ev:ev2,evPct:ev2/tc2*100,cost:tc2,liq:liq,slippage:slippage,risk:liq<2000?'MEDIUM':'LOW',conditionId:m.conditionId||''});
+    }
+  });
+  // Record arb predictions
+  _arbOpps.slice(0,5).forEach(function(a){
+    if(a.risk!=='HIGH'){
+      var exists=_predictions.some(function(p){return p.slug===a.slug&&p.strategy==='arb'&&Date.now()-p.ts<3600000});
+      if(!exists)recordPrediction('arb',a.slug,'yes',a.yes,a.risk==='LOW'?85:60,a.conditionId);
     }
   });
   var sortBy=$('arb-sort').value;
@@ -952,15 +1083,19 @@ function arbRender(){
   var ah='';
   _arbOpps.slice(0,20).forEach(function(a){
     var url=polyUrl(a);
+    var riskCls=a.risk==='HIGH'?'dn':a.risk==='MEDIUM'?'warn':'up';
     ah+='<div class="market-card"><div class="card-top"><div class="card-question">'+a.question.slice(0,70)+'</div>'+
       '<a href="'+url+'" target="_blank" class="trade-link">Trade &rarr;</a></div>'+
       '<div class="card-body">'+
       '<div class="card-row"><span class="label">Buy YES</span><span class="val up">$'+a.yes.toFixed(4)+'</span></div>'+
       '<div class="card-row"><span class="label">Buy NO</span><span class="val dn">$'+a.no.toFixed(4)+'</span></div>'+
-      '<div class="card-row"><span class="label">Total Cost</span><span class="val">$'+(a.yes+a.no).toFixed(4)+'</span></div>'+
+      '<div class="card-row"><span class="label">Total Cost (incl slippage)</span><span class="val">$'+(a.yes+a.no+a.slippage).toFixed(4)+'</span></div>'+
+      '<div class="card-row"><span class="label">Est. Slippage</span><span class="val '+riskCls+'">'+fmtPct(a.slippage*100)+'</span></div>'+
       '<div class="card-row"><span class="label">Payout</span><span class="val up">$1.00</span></div>'+
       '<div class="card-row"><span class="label">Liquidity</span><span class="val blue">'+fmtUSD(a.liq)+'</span></div>'+
-      '</div><div class="card-signal"><div class="arb-hero" style="width:100%"><div class="pct" style="color:var(--up)">'+fmtPct(a.profitPct)+'</div><div class="label" style="color:var(--up)">Guaranteed Profit (after ~2% fees)</div></div></div></div>';
+      '<div class="card-row"><span class="label">Risk</span><span class="val '+riskCls+'">'+a.risk+'</span></div>'+
+      (a.risk==='HIGH'?'<div style="margin:6px 0;padding:6px 10px;background:var(--dn-bg);border:1px solid var(--dn-border);border-radius:var(--radius-xs);font-size:10px;color:var(--dn)">\u26a0 Thin liquidity \u2014 actual fill prices may differ significantly</div>':'')+
+      '</div><div class="card-signal"><div class="arb-hero" style="width:100%"><div class="pct" style="color:var(--up)">'+fmtPct(a.profitPct)+'</div><div class="label" style="color:var(--up)">Net Profit (fees+slippage est.)</div></div></div></div>';
   });
   $('arb-grid').innerHTML=ah||'<div class="empty"><div class="empty-icon">\u2705</div>No arb found. Markets efficiently priced.</div>';
 
@@ -1001,7 +1136,7 @@ async function crScan(){
 
   for(var i=0;i<markets.length;i++){
     var m=markets[i];var tids=JSON.parse(m.clobTokenIds||'[]');
-    if(!tids[0]){m._analysis={score:0,dir:'neutral',sigs:0};continue;}
+    if(!tids[0]){m._analysis={score:0,dir:'neutral',sigs:0,signals:[],confidence:0};continue;}
     try{
       var cbPair=m._asset==='XRP'?'XRP-USD':m._asset+'-USD';
       var r=await Promise.all([
@@ -1009,23 +1144,131 @@ async function crScan(){
         fetch(_CLOB+'/price?token_id='+tids[1]+'&side=buy').then(function(x){return x.json()}).catch(function(){return null}),
         fetch(_CLOB+'/midpoint?token_id='+tids[0]).then(function(x){return x.json()}).catch(function(){return null}),
         fetch(_COINBASE+'/v2/prices/'+cbPair+'/spot').then(function(x){return x.json()}).catch(function(){return null}),
-        fetch(_EXCHANGE+'/products/'+cbPair+'/candles?granularity=300').then(function(x){return x.json()}).catch(function(){return null})
+        fetch(_EXCHANGE+'/products/'+cbPair+'/candles?granularity=300').then(function(x){return x.json()}).catch(function(){return null}),
+        // Order book depth
+        fetch(_CLOB+'/book?token_id='+tids[0]).then(function(x){return x.json()}).catch(function(){return null})
       ]);
       var yP=parseFloat((r[0]&&r[0].price)||'0.5');var nP=parseFloat((r[1]&&r[1].price)||'0.5');
       var mid=parseFloat((r[2]&&r[2].mid)||'0.5');var spot=r[3]&&r[3].data?parseFloat(r[3].data.amount):null;
-      var candles=r[4]&&Array.isArray(r[4])?r[4].slice(0,20):null;
-      var score=0;var sigs=0;
-      var dev=yP-0.5;if(Math.abs(dev)>0.003){score+=dev*80;sigs++;}
-      var md=mid-0.5;if(Math.abs(md)>0.003){score+=md*40;sigs++;}
-      if(candles&&candles.length>=2){
-        var pct=((candles[0][4]-candles[0][3])/candles[0][3])*100;if(Math.abs(pct)>0.01){score+=pct>0?10:-10;sigs++;}
-        var closes=candles.slice().reverse().map(function(c){return c[4]});
-        if(closes.length>=16){var rsi=calcRSI(closes,14);if(rsi.length){var rv=rsi[rsi.length-1];if(rv<30){score+=8;sigs++;}else if(rv>70){score-=8;sigs++;}}}
-        if(closes.length>=22){var e9=calcEMA(closes,9);var e21=calcEMA(closes,21);if(e9[e9.length-1]>e21[e21.length-1]){score+=6;sigs++;}else{score-=6;sigs++;}}
+      var candles=r[4]&&Array.isArray(r[4])?r[4].slice(0,30):null;
+      var book=r[5]||null;
+      var score=0;var sigs=0;var signals=[];
+
+      // S1: Market price deviation (calibrated: less aggressive multiplier)
+      var dev=yP-0.5;if(Math.abs(dev)>0.005){score+=dev*50;sigs++;signals.push({name:'Price Dev',val:(dev>0?'+':'')+dev.toFixed(3),cls:dev>0?'up':'dn'});}
+
+      // S2: Midpoint confirmation
+      var md=mid-0.5;if(Math.abs(md)>0.005){
+        var midAgrees=(dev>0&&md>0)||(dev<0&&md<0);
+        score+=md*(midAgrees?30:15);sigs++;
+        signals.push({name:'Midpoint',val:(md>0?'+':'')+md.toFixed(3),cls:midAgrees?'up':'warn'});
       }
-      var dir=score>3?'up':score<-3?'down':'neutral';
-      m._analysis={score:Math.round(score*10)/10,dir:dir,sigs:sigs,yP:yP,nP:nP,spot:spot};
-    }catch(e){m._analysis={score:0,dir:'neutral',sigs:0};}
+
+      // S3: Order book imbalance
+      if(book&&book.bids&&book.asks){
+        var bidVol=0,askVol=0;
+        (book.bids||[]).slice(0,10).forEach(function(b){bidVol+=parseFloat(b.size||0);});
+        (book.asks||[]).slice(0,10).forEach(function(a){askVol+=parseFloat(a.size||0);});
+        var totalVol=bidVol+askVol;
+        if(totalVol>0){
+          var imbalance=(bidVol-askVol)/totalVol; // +1 = all bids, -1 = all asks
+          if(Math.abs(imbalance)>0.15){
+            score+=imbalance*20;sigs++;
+            signals.push({name:'Book Imbal',val:(imbalance>0?'+':'')+Math.round(imbalance*100)+'%',cls:imbalance>0?'up':'dn'});
+          }
+          m._bookDepth=totalVol;
+        }
+      }
+
+      if(candles&&candles.length>=3){
+        var closes=candles.slice().reverse().map(function(c){return c[4]});
+        var volumes=candles.slice().reverse().map(function(c){return c[5]||0});
+        var highs=candles.slice().reverse().map(function(c){return c[2]});
+        var lows=candles.slice().reverse().map(function(c){return c[3]});
+
+        // S4: VWAP calculation
+        if(closes.length>=5){
+          var vwapNum=0,vwapDen=0;
+          for(var j=0;j<Math.min(closes.length,12);j++){
+            var typPrice=(highs[j]+lows[j]+closes[j])/3;
+            vwapNum+=typPrice*volumes[j];vwapDen+=volumes[j];
+          }
+          if(vwapDen>0){
+            var vwap=vwapNum/vwapDen;var vwapDev=(closes[closes.length-1]-vwap)/vwap*100;
+            if(Math.abs(vwapDev)>0.02){
+              score+=vwapDev>0?8:-8;sigs++;
+              signals.push({name:'VWAP',val:(vwapDev>0?'Above':'Below'),cls:vwapDev>0?'up':'dn'});
+            }
+            m._vwap=vwap;
+          }
+        }
+
+        // S5: Bollinger Bands (20-period, 2 std devs)
+        if(closes.length>=20){
+          var bbPeriod=20;var bbSlice=closes.slice(-bbPeriod);
+          var bbMean=bbSlice.reduce(function(a,b){return a+b},0)/bbPeriod;
+          var bbVariance=bbSlice.reduce(function(a,b){return a+(b-bbMean)*(b-bbMean)},0)/bbPeriod;
+          var bbStd=Math.sqrt(bbVariance);
+          var bbUpper=bbMean+2*bbStd,bbLower=bbMean-2*bbStd;
+          var lastClose=closes[closes.length-1];
+          if(lastClose>bbUpper){score-=10;sigs++;signals.push({name:'BB Upper',val:'Overbought',cls:'dn'});}
+          else if(lastClose<bbLower){score+=10;sigs++;signals.push({name:'BB Lower',val:'Oversold',cls:'up'});}
+          else{
+            var bbPos=(lastClose-bbLower)/(bbUpper-bbLower);
+            signals.push({name:'BB Pos',val:Math.round(bbPos*100)+'%',cls:bbPos>0.5?'up':'dn'});
+          }
+        }
+
+        // S6: Momentum (last candle direction, reduced weight)
+        var pct=((candles[0][4]-candles[0][3])/candles[0][3])*100;
+        if(Math.abs(pct)>0.02){score+=pct>0?6:-6;sigs++;signals.push({name:'Momentum',val:(pct>0?'+':'')+pct.toFixed(2)+'%',cls:pct>0?'up':'dn'});}
+
+        // S7: RSI
+        if(closes.length>=16){var rsi=calcRSI(closes,14);if(rsi.length){var rv=rsi[rsi.length-1];
+          if(rv<25){score+=10;sigs++;signals.push({name:'RSI',val:Math.round(rv),cls:'up'});}
+          else if(rv<35){score+=5;sigs++;signals.push({name:'RSI',val:Math.round(rv),cls:'up'});}
+          else if(rv>75){score-=10;sigs++;signals.push({name:'RSI',val:Math.round(rv),cls:'dn'});}
+          else if(rv>65){score-=5;sigs++;signals.push({name:'RSI',val:Math.round(rv),cls:'dn'});}
+          m._rsi=rv;
+        }}
+
+        // S8: EMA crossover
+        if(closes.length>=22){var e9=calcEMA(closes,9);var e21=calcEMA(closes,21);
+          var emaDiff=e9[e9.length-1]-e21[e21.length-1];
+          // Check if cross just happened (previous was opposite)
+          var prevDiff=e9.length>1?e9[e9.length-2]-e21[e21.length-2]:emaDiff;
+          var freshCross=(emaDiff>0&&prevDiff<=0)||(emaDiff<0&&prevDiff>=0);
+          if(emaDiff>0){score+=freshCross?10:4;sigs++;signals.push({name:'EMA 9/21',val:'Bullish'+(freshCross?' Cross':''),cls:'up'});}
+          else{score-=freshCross?10:4;sigs++;signals.push({name:'EMA 9/21',val:'Bearish'+(freshCross?' Cross':''),cls:'dn'});}
+        }
+
+        // S9: Volume confirmation — high volume validates the signal direction
+        if(volumes.length>=5){
+          var avgVol=volumes.slice(0,5).reduce(function(a,b){return a+b},0)/5;
+          var curVol=volumes[volumes.length-1]||0;
+          if(avgVol>0&&curVol>avgVol*1.5){
+            score+=score>0?5:-5; // amplify existing direction
+            sigs++;signals.push({name:'Vol Spike',val:Math.round(curVol/avgVol*100)+'%',cls:'up'});
+          }
+        }
+      }
+
+      // Require signal agreement: dampen score if signals disagree
+      var upSigs=signals.filter(function(s){return s.cls==='up'}).length;
+      var dnSigs=signals.filter(function(s){return s.cls==='dn'}).length;
+      var agreement=sigs>0?Math.max(upSigs,dnSigs)/sigs:0;
+      if(agreement<0.6)score*=0.5; // conflicting signals = lower conviction
+
+      var dir=score>5?'up':score<-5?'down':'neutral';
+      // Confidence: based on signal agreement + count + order book depth
+      var conf=Math.min(90,Math.round(agreement*40+Math.min(sigs,8)*5+(m._bookDepth>100?10:0)));
+      m._analysis={score:Math.round(score*10)/10,dir:dir,sigs:sigs,yP:yP,nP:nP,spot:spot,signals:signals,confidence:conf};
+      // Record crypto predictions
+      if(dir!=='neutral'&&conf>=40){
+        var exists=_predictions.some(function(p){return p.slug===(m._eventSlug||'')&&p.strategy==='crypto'&&Date.now()-p.ts<300000});
+        if(!exists)recordPrediction('crypto',m._eventSlug||'',dir,yP,conf,m.conditionId);
+      }
+    }catch(e){m._analysis={score:0,dir:'neutral',sigs:0,signals:[],confidence:0};}
   }
   _crMkts=markets;crRender();lg('Crypto: '+markets.length+' markets','ok');
 }
@@ -1050,6 +1293,7 @@ function crRender(){
     var dirCls=d==='up'?'up':d==='down'?'dn':'neutral';
     var arrow=d==='up'?'\u25B2':d==='down'?'\u25BC':'\u25CF';
     var url=polyUrl(m);
+    var confCls=a.confidence>=60?'up':a.confidence>=35?'warn':'dn';
     html+='<div class="market-card"><div class="card-top"><div class="card-question"><span style="font-size:16px;font-weight:800">'+m._asset+'</span> <span class="chip blue" style="font-size:9px">5 MIN</span></div>'+
       '<a href="'+url+'" target="_blank" class="trade-link">Trade &rarr;</a></div>'+
       '<div class="card-body">'+
@@ -1057,10 +1301,17 @@ function crRender(){
       '<div class="card-row"><span class="label">UP (YES)</span><span class="val up">$'+(a.yP||0.5).toFixed(3)+'</span></div>'+
       '<div class="card-row"><span class="label">DOWN (NO)</span><span class="val dn">$'+(a.nP||0.5).toFixed(3)+'</span></div>'+
       (a.spot?'<div class="card-row"><span class="label">'+m._asset+' Spot</span><span class="val blue">$'+a.spot.toFixed(2)+'</span></div>':'')+
-      '</div>'+
+      '<div class="card-row"><span class="label">Confidence</span><span class="val '+confCls+'">'+(a.confidence||0)+'%</span></div>';
+    // Show individual signals
+    if(a.signals&&a.signals.length){
+      html+='<div class="card-divider"></div><div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">';
+      a.signals.forEach(function(s){html+='<span class="chip '+s.cls+'" style="font-size:9px">'+s.name+': '+s.val+'</span>';});
+      html+='</div>';
+    }
+    html+='</div>'+
       '<div class="card-signal"><span class="signal-dir '+dirCls+'">'+arrow+' '+d.toUpperCase()+'</span>'+
       '<span class="signal-score" style="color:var(--'+(d==='up'?'up':d==='down'?'dn':'warn')+')">'+(a.score>0?'+':'')+a.score+'</span>'+
-      '<span class="signal-meta">'+a.sigs+' signals</span></div></div>';
+      '<span class="signal-meta">'+a.sigs+' signals \u2022 '+(a.confidence||0)+'% conf</span></div></div>';
   });
   $('cr-grid').innerHTML=html||'<div class="empty"><div class="empty-icon">\u26a1</div>No active 5-min markets found.</div>';
 }
@@ -1093,6 +1344,26 @@ function accRender(){
       '</div>';
   });
   $('acc-panel').innerHTML=html;
+  // Render accuracy log
+  var logHtml='';
+  var allLogs=[];
+  features.forEach(function(f){
+    var a=_acc[f.key];
+    (a.log||[]).forEach(function(l){l._strat=f.name;allLogs.push(l);});
+  });
+  allLogs.sort(function(a,b){return(b.ts||0)-(a.ts||0)});
+  if(allLogs.length){
+    allLogs.slice(0,30).forEach(function(l){
+      var c=l.outcome==='win'?'var(--up)':'var(--dn)';
+      var t=new Date(l.ts).toLocaleString();
+      logHtml+='<div style="color:'+c+'">['+t+'] '+l._strat+' \u2014 '+(l.slug||'').slice(0,30)+' \u2014 '+l.dir+' \u2192 '+l.outcome.toUpperCase()+' (conf: '+(l.confidence||'?')+'%)</div>';
+    });
+  }else{
+    logHtml+='<div style="color:var(--t4)">Predictions are being tracked. Outcomes will appear as markets resolve.</div>';
+    var pendingCt=_predictions.filter(function(p){return!p.resolved}).length;
+    if(pendingCt)logHtml+='<div style="color:var(--warn)">'+pendingCt+' predictions pending resolution...</div>';
+  }
+  $('acc-log').innerHTML=logHtml;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1106,8 +1377,10 @@ $('conn-dot').classList.add(_onPoly?'':'off');
 smFetchTrades();
 crScan();
 accRender();
+checkOutcomes(); // check pending predictions on startup
 setInterval(crScan,30000);
 setInterval(accRender,10000);
+setInterval(checkOutcomes,120000); // check outcomes every 2 min
 </script>
 </body>
 </html>
