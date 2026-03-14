@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PolyBot v6.0 — Smart Money + Weather + Arbitrage</title>
+<style>
+:root{
+  --up:#00e676;--up-bg:#00e67615;--up-soft:#00e67644;
+  --dn:#ff5252;--dn-bg:#ff525215;--dn-soft:#ff525244;
+  --nt:#ffa500;--nt-bg:#ffa50015;--nt-soft:#ffa50044;
+  --accent:#00e5ff;--accent-bg:#00e5ff15;--accent-soft:#00e5ff33;
+  --accent2:#7c4dff;--accent2-bg:#7c4dff15;
+  --accent3:#ff9100;--accent3-bg:#ff910015;
+  --gold:#ffd700;--gold-bg:#ffd70015;
+  --bg0:#070b14;--bg1:#0a0e17;--bg2:#0d1220;--bg3:#131a2e;
+  --border:#1a2035;--border2:#253050;
+  --t1:#e0e6f0;--t2:#8892a8;--t3:#556;
+  --radius:10px;--radius-sm:6px;--radius-xs:4px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg1);color:var(--t1);font-family:'SF Mono','Fira Code','Cascadia Code',monospace;overflow-x:hidden;line-height:1.5}
+
+/* HEADER */
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--bg2)}
+.hdr h1{font-size:16px;letter-spacing:2px;font-weight:800}
+.hdr h1 .brand{color:var(--accent)}
+.hdr h1 .ver{color:var(--t3);font-size:10px;font-weight:400;margin-left:8px}
+.st{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--t2)}
+
+/* TABS */
+.tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg2)}
+.tab{padding:10px 22px;cursor:pointer;font-size:11px;letter-spacing:1.5px;font-weight:600;color:var(--t3);border-bottom:2px solid transparent;transition:all .2s;font-family:inherit}
+.tab:hover{color:var(--t2);background:var(--bg3)}
+.tab.act{color:var(--accent);border-bottom-color:var(--accent);background:var(--bg3)}
+.tab .tab-badge{font-size:9px;background:var(--accent);color:var(--bg1);padding:1px 6px;border-radius:10px;margin-left:6px;font-weight:800}
+.tab .tab-badge.warn{background:var(--nt)}
+.tab .tab-badge.good{background:var(--up)}
+
+.tab-content{display:none;padding:20px 24px}
+.tab-content.act{display:block}
+
+/* STATS BAR */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));border-bottom:1px solid var(--border);background:var(--bg0)}
+.sbox{padding:12px 20px;border-right:1px solid var(--border);text-align:center}
+.sbox:last-child{border-right:none}
+.sbox .lbl{font-size:8px;letter-spacing:1.5px;color:var(--t3);margin-bottom:3px;font-weight:600}
+.sbox .val{font-size:20px;font-weight:800;color:var(--accent)}
+.sbox .val.up{color:var(--up)}.sbox .val.dn{color:var(--dn)}.sbox .val.nt{color:var(--nt)}.sbox .val.gold{color:var(--gold)}
+
+/* GRID */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;margin-top:14px}
+.card{background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;transition:all .25s}
+.card:hover{border-color:var(--accent-soft);box-shadow:0 4px 20px #00000040}
+.card.su{border-left:3px solid var(--up)}
+.card.sd{border-left:3px solid var(--dn)}
+.card.sn{border-left:3px solid var(--nt)}
+.card.sg{border-left:3px solid var(--gold)}
+.card-hdr{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:var(--bg2);border-bottom:1px solid var(--border)}
+.card-body{padding:12px 14px;font-size:11px;line-height:1.6}
+.card-body .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.card-body .label{color:var(--t3);font-size:9px;letter-spacing:1px;font-weight:600}
+.card-body .value{font-weight:700}
+
+/* TAGS & CHIPS */
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px}
+.chip.up{background:var(--up-bg);color:var(--up);border:1px solid var(--up-soft)}
+.chip.dn{background:var(--dn-bg);color:var(--dn);border:1px solid var(--dn-soft)}
+.chip.nt{background:var(--nt-bg);color:var(--nt);border:1px solid var(--nt-soft)}
+.chip.accent{background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-soft)}
+.chip.gold{background:var(--gold-bg);color:var(--gold);border:1px solid #ffd70044}
+.chip.purple{background:var(--accent2-bg);color:var(--accent2);border:1px solid #7c4dff44}
+.tag{font-size:8px;padding:2px 6px;border-radius:var(--radius-xs);font-weight:600;letter-spacing:.5px}
+
+/* SMART MONEY FEED */
+.feed{display:flex;flex-direction:column;gap:8px;margin-top:14px;max-height:600px;overflow-y:auto}
+.feed-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg3);border-radius:var(--radius-sm);border:1px solid var(--border)}
+.feed-item:hover{border-color:var(--accent-soft)}
+.feed-rank{font-size:10px;color:var(--accent);font-weight:800;min-width:30px}
+.feed-name{font-weight:700;font-size:12px;min-width:120px}
+.feed-action{flex:1;font-size:10px;color:var(--t2)}
+.feed-size{font-weight:700;font-size:11px;min-width:80px;text-align:right}
+.feed-time{font-size:9px;color:var(--t3);min-width:60px;text-align:right}
+
+/* WHALE CONSENSUS */
+.consensus{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.consensus-item{padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:10px}
+
+/* WEATHER */
+.weather-card .forecast{padding:8px 10px;background:var(--bg2);border-radius:var(--radius-sm);margin-top:8px}
+.edge-bar{height:6px;border-radius:3px;background:var(--bg2);overflow:hidden;margin-top:4px}
+.edge-fill{height:100%;border-radius:3px;transition:width .5s}
+.edge-fill.positive{background:linear-gradient(90deg,var(--bg2),var(--up))}
+.edge-fill.negative{background:linear-gradient(90deg,var(--dn),var(--bg2))}
+
+/* ARB */
+.arb-profit{font-size:18px;font-weight:800;color:var(--up)}
+.arb-guaranteed{font-size:9px;color:var(--up);letter-spacing:1px;font-weight:600}
+
+/* ACCURACY PANEL */
+.acc-panel{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:14px}
+.acc-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center}
+.acc-card .acc-pct{font-size:28px;font-weight:800}
+.acc-card .acc-label{font-size:9px;color:var(--t3);letter-spacing:1.5px;margin-top:2px}
+.acc-card .acc-detail{font-size:10px;color:var(--t2);margin-top:6px}
+
+/* CONTROLS */
+.ctrl-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rbtn{padding:5px 16px;border:none;border-radius:var(--radius-sm);background:var(--accent);color:var(--bg1);font-weight:700;cursor:pointer;font-family:inherit;font-size:10px;transition:all .2s}
+.rbtn:hover{filter:brightness(1.15)}
+.rbtn.secondary{background:var(--bg3);color:var(--t2);border:1px solid var(--border)}
+select{background:var(--bg3);color:var(--t2);border:1px solid var(--border);padding:4px 8px;border-radius:var(--radius-sm);font-family:inherit;font-size:10px;cursor:pointer}
+input[type=text]{background:var(--bg3);color:var(--t1);border:1px solid var(--border);padding:5px 10px;border-radius:var(--radius-sm);font-family:inherit;font-size:10px;width:200px}
+input[type=text]:focus{border-color:var(--accent);outline:none}
+
+/* LINK */
+.link{color:var(--accent);text-decoration:none;font-weight:600;font-size:10px}
+.link:hover{text-decoration:underline}
+
+/* LOG */
+.logbox{margin-top:20px}
+.logbox h3{font-size:11px;letter-spacing:2px;color:var(--t3);margin-bottom:8px;font-weight:700}
+#log{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px;max-height:120px;overflow-y:auto;font-size:9px;line-height:1.8;color:var(--t3)}
+
+/* EMPTY */
+.empty{color:var(--t3);padding:30px;text-align:center;font-size:11px;letter-spacing:1px}
+
+/* SEC HEADER */
+.sec-hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.sec-hdr h2{font-size:12px;letter-spacing:2px;color:var(--t2);font-weight:700}
+.badge{background:var(--accent);color:var(--bg1);font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .hdr{padding:8px 14px}.hdr h1{font-size:13px}
+  .tabs{overflow-x:auto}.tab{padding:8px 14px;font-size:9px;white-space:nowrap}
+  .tab-content{padding:12px 14px}
+  .grid{grid-template-columns:1fr}
+  .feed-item{flex-wrap:wrap;gap:6px}
+  .stats{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1><span class="brand">POLY</span>BOT<span class="ver">v6.0 — MULTI-STRATEGY</span></h1>
+  <div class="st"><span id="stxt">Starting...</span></div>
+</div>
+
+<div class="tabs" id="tabs">
+  <div class="tab act" data-tab="smart">SMART MONEY<span class="tab-badge" id="sm-badge">0</span></div>
+  <div class="tab" data-tab="weather">WEATHER<span class="tab-badge warn" id="wx-badge">0</span></div>
+  <div class="tab" data-tab="arb">ARBITRAGE<span class="tab-badge good" id="arb-badge">0</span></div>
+  <div class="tab" data-tab="crypto">CRYPTO 5M<span class="tab-badge" id="cr-badge">0</span></div>
+  <div class="tab" data-tab="accuracy">ACCURACY</div>
+</div>
+
+<!-- ═══════════════ SMART MONEY TAB ═══════════════ -->
+<div class="tab-content act" id="tc-smart">
+  <div class="stats" id="sm-stats">
+    <div class="sbox"><div class="lbl">TRACKED WALLETS</div><div class="val" id="sm-tracked">--</div></div>
+    <div class="sbox"><div class="lbl">ACTIVE (7D)</div><div class="val" id="sm-active">--</div></div>
+    <div class="sbox"><div class="lbl">COMBINED P/L</div><div class="val gold" id="sm-pnl">--</div></div>
+    <div class="sbox"><div class="lbl">AVG ROI</div><div class="val up" id="sm-roi">--</div></div>
+    <div class="sbox"><div class="lbl">SIGNALS TODAY</div><div class="val" id="sm-signals">0</div></div>
+  </div>
+  <div style="margin-top:14px">
+    <div class="ctrl-row">
+      <button class="rbtn" id="sm-refresh">Refresh Smart Money</button>
+      <select id="sm-filter"><option value="all">All Archetypes</option><option value="sniper">Snipers (>30% ROI)</option><option value="sharp">Sharps (10-30%)</option><option value="grinder">Grinders (<10%)</option></select>
+      <select id="sm-cat"><option value="all">All Categories</option><option value="politics">Politics</option><option value="sports">Sports</option><option value="crypto">Crypto</option><option value="other">Other</option></select>
+    </div>
+    <div class="sec-hdr" style="margin-top:16px"><h2>WHALE CONSENSUS</h2></div>
+    <div id="sm-consensus" class="consensus"><div class="empty">Loading whale positions...</div></div>
+    <div class="sec-hdr" style="margin-top:16px"><h2>RECENT WHALE TRADES</h2><span class="badge" id="sm-feed-count">0</span></div>
+    <div class="feed" id="sm-feed"><div class="empty">Loading smart money feed...</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════ WEATHER TAB ═══════════════ -->
+<div class="tab-content" id="tc-weather">
+  <div class="stats" id="wx-stats">
+    <div class="sbox"><div class="lbl">WEATHER MARKETS</div><div class="val" id="wx-total">--</div></div>
+    <div class="sbox"><div class="lbl">SIGNALS (>8% EDGE)</div><div class="val up" id="wx-signals">--</div></div>
+    <div class="sbox"><div class="lbl">AVG EDGE</div><div class="val" id="wx-edge">--</div></div>
+    <div class="sbox"><div class="lbl">ACCURACY</div><div class="val up" id="wx-acc">--</div></div>
+  </div>
+  <div style="margin-top:14px">
+    <div class="ctrl-row">
+      <button class="rbtn" id="wx-refresh">Scan Weather Markets</button>
+      <input type="text" id="wx-apikey" placeholder="WeatherAPI.com key (optional)">
+      <select id="wx-threshold"><option value="8">Min 8% edge</option><option value="5">Min 5% edge</option><option value="10">Min 10% edge</option><option value="15">Min 15% edge</option></select>
+    </div>
+    <div class="sec-hdr" style="margin-top:16px"><h2>WEATHER MARKET OPPORTUNITIES</h2><span class="badge" id="wx-count">0</span></div>
+    <div class="grid" id="wx-grid"><div class="empty">Click "Scan Weather Markets" to start...</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════ ARBITRAGE TAB ═══════════════ -->
+<div class="tab-content" id="tc-arb">
+  <div class="stats" id="arb-stats">
+    <div class="sbox"><div class="lbl">MARKETS SCANNED</div><div class="val" id="arb-scanned">--</div></div>
+    <div class="sbox"><div class="lbl">ARB OPPORTUNITIES</div><div class="val up" id="arb-opps">--</div></div>
+    <div class="sbox"><div class="lbl">STRADDLE OPPS</div><div class="val" id="arb-straddles">--</div></div>
+    <div class="sbox"><div class="lbl">BEST EDGE</div><div class="val up" id="arb-best">--</div></div>
+    <div class="sbox"><div class="lbl">TOTAL SCANS</div><div class="val" id="arb-scans">0</div></div>
+  </div>
+  <div style="margin-top:14px">
+    <div class="ctrl-row">
+      <button class="rbtn" id="arb-refresh">Scan for Arbitrage</button>
+      <select id="arb-sort"><option value="edge">Sort by Edge</option><option value="liquidity">Sort by Liquidity</option></select>
+    </div>
+    <div class="sec-hdr" style="margin-top:16px"><h2>SAME-MARKET ARBITRAGE</h2><span class="badge" id="arb-count">0</span></div>
+    <div class="grid" id="arb-grid"><div class="empty">Click "Scan for Arbitrage" to start...</div></div>
+    <div class="sec-hdr" style="margin-top:16px"><h2>STRADDLE OPPORTUNITIES</h2><span class="badge" id="str-count">0</span></div>
+    <div class="grid" id="str-grid"><div class="empty">Scanning for straddles...</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════ CRYPTO 5M TAB ═══════════════ -->
+<div class="tab-content" id="tc-crypto">
+  <div class="stats">
+    <div class="sbox"><div class="lbl">ACTIVE MARKETS</div><div class="val" id="cr-act">--</div></div>
+    <div class="sbox"><div class="lbl">STRONG SIGNALS</div><div class="val" id="cr-str">--</div></div>
+    <div class="sbox"><div class="lbl">WINDOW ENDS</div><div class="val nt" id="cr-win">--</div></div>
+    <div class="sbox"><div class="lbl">ACCURACY</div><div class="val up" id="cr-acc">--</div></div>
+  </div>
+  <div style="margin-top:14px">
+    <div class="ctrl-row">
+      <button class="rbtn" id="cr-refresh">Refresh</button>
+      <select id="cr-asset"><option value="ALL">All Assets</option><option value="BTC">BTC</option><option value="ETH">ETH</option><option value="SOL">SOL</option><option value="XRP">XRP</option></select>
+    </div>
+    <div class="grid" id="cr-grid" style="margin-top:14px"><div class="empty">Loading 5-min markets...</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════ ACCURACY TAB ═══════════════ -->
+<div class="tab-content" id="tc-accuracy">
+  <div class="sec-hdr"><h2>PREDICTION ACCURACY DASHBOARD</h2></div>
+  <div class="acc-panel" id="acc-panel"></div>
+  <div class="sec-hdr" style="margin-top:20px"><h2>ACCURACY LOG</h2></div>
+  <div id="acc-log" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px;max-height:300px;overflow-y:auto;font-size:10px;color:var(--t2)"><div class="empty">No accuracy data yet. Use the features to generate predictions.</div></div>
+</div>
+
+<div style="padding:0 24px 20px">
+  <div class="logbox"><h3>ACTIVITY LOG</h3><div id="log"></div></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// POLYBOT v6.0 — MULTI-STRATEGY ENGINE
+// Features: Smart Money | Weather Arb | Arbitrage | Crypto 5M
+// ═══════════════════════════════════════════════════════════
+
+// ── API URLs ──
+var _onPoly=location.hostname.indexOf('polymarket.com')!==-1;
+var _GAMMA=_onPoly?'https://gamma-api.polymarket.com':'/api/gamma';
+var _CLOB=_onPoly?'https://clob.polymarket.com':'/api/clob';
+var _DATA='https://data-api.polymarket.com';
+var _COINBASE=_onPoly?'https://api.coinbase.com':'/api/coinbase';
+var _EXCHANGE=_onPoly?'https://api.exchange.coinbase.com':'/api/exchange';
+
+// ── Accuracy Store ──
+var _acc={
+  smartMoney:{wins:0,losses:0,pending:0,log:[]},
+  weather:{wins:0,losses:0,pending:0,log:[]},
+  arb:{wins:0,losses:0,pending:0,log:[]},
+  crypto:{wins:0,losses:0,neutral:0,log:[]}
+};
+
+// ── Utility ──
+function lg(msg,type){var el=document.getElementById('log');if(!el)return;var t=new Date().toLocaleTimeString();var c=type==='err'?'var(--dn)':type==='ok'?'var(--up)':'var(--t3)';el.innerHTML='<div style="color:'+c+'">['+t+'] '+msg+'</div>'+el.innerHTML;if(el.children.length>80)el.lastChild.remove();}
+function $(id){return document.getElementById(id)}
+function fmtUSD(n){return n>=1000000?'$'+(n/1000000).toFixed(1)+'M':n>=1000?'$'+(n/1000).toFixed(1)+'K':'$'+n.toFixed(2)}
+function fmtPct(n){return (n>0?'+':'')+n.toFixed(1)+'%'}
+function timeAgo(ts){var d=Math.floor((Date.now()/1000-ts)/60);return d<60?d+'m ago':d<1440?Math.floor(d/60)+'h ago':Math.floor(d/1440)+'d ago'}
+
+// ── Tab Controls ──
+document.querySelectorAll('.tab').forEach(function(t){t.addEventListener('click',function(){
+  document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('act')});
+  document.querySelectorAll('.tab-content').forEach(function(x){x.classList.remove('act')});
+  t.classList.add('act');$('tc-'+t.dataset.tab).classList.add('act');
+});});
+
+// ═══════════════════════════════════════════════════════════
+// FEATURE 1: SMART MONEY TRACKER
+// ═══════════════════════════════════════════════════════════
+var _smTraders=[];var _smFeed=[];var _smConsensus={};
+
+async function smLoadLeaderboard(){
+  lg('Loading top 100 traders...');
+  var all=[];
+  for(var off=0;off<100;off+=50){
+    try{
+      var r=await fetch(_DATA+'/v1/leaderboard?category=OVERALL&timePeriod=ALL&orderBy=PNL&limit=50&offset='+off);
+      var d=await r.json();all=all.concat(d);
+    }catch(e){lg('Leaderboard fetch error: '+e.message,'err');}
+  }
+  _smTraders=all.map(function(t){
+    var roi=t.vol>0?(t.pnl/t.vol*100):0;
+    var archetype=roi>30?'sniper':roi>10?'sharp':'grinder';
+    return{rank:t.rank,name:t.userName||t.proxyWallet.slice(0,10),wallet:t.proxyWallet,pnl:t.pnl,vol:t.vol,roi:roi,archetype:archetype,x:t.xUsername||''};
+  });
+  lg('Loaded '+_smTraders.length+' traders','ok');
+  return _smTraders;
+}
+
+async function smFetchTrades(){
+  if(!_smTraders.length)await smLoadLeaderboard();
+  lg('Fetching recent whale trades...');
+  var filter=$('sm-filter').value;var catFilter=$('sm-cat').value;
+  var traders=_smTraders.filter(function(t){
+    if(filter==='sniper')return t.archetype==='sniper';
+    if(filter==='sharp')return t.archetype==='sharp';
+    if(filter==='grinder')return t.archetype==='grinder';
+    return true;
+  });
+  // Fetch trades for top 30 filtered traders (rate limit friendly)
+  var subset=traders.slice(0,30);var allTrades=[];
+  var batches=[];
+  for(var i=0;i<subset.length;i+=10){batches.push(subset.slice(i,i+10));}
+  for(var b=0;b<batches.length;b++){
+    var proms=batches[b].map(function(t){
+      return fetch(_DATA+'/v1/trades?user='+t.wallet+'&limit=5').then(function(r){return r.json()}).then(function(trades){
+        return trades.map(function(tr){tr._trader=t;return tr;});
+      }).catch(function(){return[];});
+    });
+    var results=await Promise.all(proms);
+    results.forEach(function(trades){allTrades=allTrades.concat(trades);});
+  }
+  // Categorize and filter
+  allTrades.forEach(function(tr){
+    var title=(tr.title||'').toLowerCase();
+    if(title.match(/bitcoin|btc|eth|crypto|solana|xrp|updown/))tr._cat='crypto';
+    else if(title.match(/temperature|weather|fahrenheit|celsius/))tr._cat='weather';
+    else if(title.match(/trump|biden|election|president|congress|senate|republican|democrat/))tr._cat='politics';
+    else if(title.match(/nfl|nba|mlb|nhl|ufc|championship|match|spread:|vs\./))tr._cat='sports';
+    else tr._cat='other';
+  });
+  if(catFilter!=='all')allTrades=allTrades.filter(function(tr){return tr._cat===catFilter});
+  allTrades.sort(function(a,b){return(b.timestamp||0)-(a.timestamp||0)});
+  _smFeed=allTrades.slice(0,100);
+
+  // Build consensus: group by market
+  _smConsensus={};
+  allTrades.forEach(function(tr){
+    var key=tr.eventSlug||tr.slug||tr.conditionId;
+    if(!key)return;
+    if(!_smConsensus[key])_smConsensus[key]={title:tr.title||'Unknown',buys:0,sells:0,totalSize:0,traders:[],side:tr.side};
+    if(tr.side==='BUY')_smConsensus[key].buys++;else _smConsensus[key].sells++;
+    _smConsensus[key].totalSize+=parseFloat(tr.size||0);
+    var tName=tr._trader?tr._trader.name:'anon';
+    if(_smConsensus[key].traders.indexOf(tName)===-1)_smConsensus[key].traders.push(tName);
+  });
+  smRender();
+  lg('Smart money: '+_smFeed.length+' recent trades across '+Object.keys(_smConsensus).length+' markets','ok');
+}
+
+function smRender(){
+  // Stats
+  var active7d=_smTraders.filter(function(t){return true}).length; // All loaded are counted
+  $('sm-tracked').textContent=_smTraders.length;
+  $('sm-active').textContent=_smFeed.length>0?'Yes':'--';
+  var totalPnl=_smTraders.reduce(function(s,t){return s+t.pnl},0);
+  $('sm-pnl').textContent=fmtUSD(totalPnl);
+  var avgRoi=_smTraders.length>0?(_smTraders.reduce(function(s,t){return s+t.roi},0)/_smTraders.length):0;
+  $('sm-roi').textContent=fmtPct(avgRoi);
+  $('sm-signals').textContent=_smFeed.length;
+  $('sm-badge').textContent=_smFeed.length;
+  $('sm-feed-count').textContent=_smFeed.length;
+
+  // Consensus
+  var consArr=Object.values(_smConsensus).sort(function(a,b){return b.traders.length-a.traders.length});
+  var consHtml='';
+  consArr.slice(0,12).forEach(function(c){
+    var cls=c.buys>c.sells?'up':c.sells>c.buys?'dn':'nt';
+    consHtml+='<div class="consensus-item" style="border-left:3px solid var(--'+cls+')"><strong>'+c.title.slice(0,40)+'</strong><br>'+
+      '<span class="chip '+cls+'" style="margin-top:4px">'+c.traders.length+' whales '+(c.buys>c.sells?'BULLISH':'BEARISH')+'</span> '+
+      '<span style="font-size:9px;color:var(--t3)">'+fmtUSD(c.totalSize)+' vol</span></div>';
+  });
+  $('sm-consensus').innerHTML=consHtml||'<div class="empty">No consensus data yet.</div>';
+
+  // Feed
+  var feedHtml='';
+  _smFeed.slice(0,50).forEach(function(tr){
+    var t=tr._trader||{name:'?',rank:'?',archetype:'grinder',roi:0};
+    var arcCls=t.archetype==='sniper'?'gold':t.archetype==='sharp'?'accent':'nt';
+    var sideCls=tr.side==='BUY'?'up':'dn';
+    feedHtml+='<div class="feed-item">'+
+      '<span class="feed-rank">#'+t.rank+'</span>'+
+      '<span class="feed-name">'+t.name.slice(0,16)+' <span class="chip '+arcCls+'" style="font-size:7px;padding:1px 5px">'+t.archetype.toUpperCase()+'</span></span>'+
+      '<span class="feed-action"><span class="chip '+sideCls+'" style="font-size:8px;padding:1px 6px">'+tr.side+'</span> '+
+      (tr.title||'').slice(0,45)+' @ $'+parseFloat(tr.price||0).toFixed(3)+'</span>'+
+      '<span class="feed-size" style="color:var(--'+sideCls+')">'+fmtUSD(parseFloat(tr.size||0))+'</span>'+
+      '<span class="feed-time">'+timeAgo(tr.timestamp)+'</span></div>';
+  });
+  $('sm-feed').innerHTML=feedHtml||'<div class="empty">No trades found.</div>';
+}
+
+$('sm-refresh').addEventListener('click',function(){smFetchTrades()});
+$('sm-filter').addEventListener('change',function(){smFetchTrades()});
+$('sm-cat').addEventListener('change',function(){smFetchTrades()});
+
+// ═══════════════════════════════════════════════════════════
+// FEATURE 2: WEATHER FORECAST ARBITRAGE SCANNER
+// ═══════════════════════════════════════════════════════════
+var _wxMarkets=[];var _wxScans=0;
+
+function wxParseQuestion(q){
+  // Parse: "Will the highest temperature in Tokyo be 18°C or higher on March 16?"
+  var city=null,threshold=null,unit=null,op=null,date=null;
+  var cityMatch=q.match(/in ([A-Z][a-zA-Z\s]+?) be/);
+  if(cityMatch)city=cityMatch[1].trim();
+  var tempMatch=q.match(/(\-?\d+)°([FC])/);
+  if(tempMatch){threshold=parseInt(tempMatch[1]);unit=tempMatch[2];}
+  var rangeMatch=q.match(/between (\d+)-(\d+)°([FC])/);
+  if(rangeMatch){threshold=[parseInt(rangeMatch[1]),parseInt(rangeMatch[2])];unit=rangeMatch[3];op='between';}
+  if(!op){
+    if(q.match(/or higher|or above/i))op='>=';
+    else if(q.match(/or below|or lower/i))op='<=';
+    else op='==';
+  }
+  var dateMatch=q.match(/on (March|April|May|June|July|August|September|October|November|December|January|February)\s+(\d+)/i);
+  if(dateMatch){var months={January:1,February:2,March:3,April:4,May:5,June:6,July:7,August:8,September:9,October:10,November:11,December:12};
+    var mon=months[dateMatch[1]]||3;var day=parseInt(dateMatch[2]);date='2026-'+(mon<10?'0':'')+mon+'-'+(day<10?'0':'')+day;}
+  return{city:city,threshold:threshold,unit:unit,op:op,date:date};
+}
+
+async function wxScan(){
+  lg('Scanning weather markets...');
+  _wxScans++;
+  // Fetch active markets and filter for weather
+  var allMarkets=[];
+  for(var off=0;off<500;off+=100){
+    try{
+      var r=await fetch(_GAMMA+'/markets?limit=100&active=true&closed=false&offset='+off+'&order=liquidity&ascending=false');
+      var d=await r.json();if(!d.length)break;allMarkets=allMarkets.concat(d);
+    }catch(e){break;}
+  }
+  var weatherKw=['temperature','fahrenheit','celsius','°F','°C','weather','precipitation','rain','snow'];
+  _wxMarkets=allMarkets.filter(function(m){
+    var q=(m.question||'').toLowerCase();
+    return weatherKw.some(function(kw){return q.indexOf(kw.toLowerCase())!==-1});
+  });
+
+  // Parse each market
+  _wxMarkets.forEach(function(m){
+    m._parsed=wxParseQuestion(m.question||'');
+    var prices=JSON.parse(m.outcomePrices||'[]');
+    m._yesPrice=parseFloat(prices[0]||'0.5');
+    m._noPrice=parseFloat(prices[1]||'0.5');
+    m._liq=parseFloat(m.liquidity||'0');
+  });
+
+  // Try to get forecasts if API key provided
+  var apiKey=$('wx-apikey').value.trim();
+  if(apiKey){
+    lg('Fetching weather forecasts...');
+    var forecastProms=_wxMarkets.map(function(m){
+      var p=m._parsed;if(!p.city||!p.date)return Promise.resolve();
+      return fetch('https://api.weatherapi.com/v1/forecast.json?key='+apiKey+'&q='+encodeURIComponent(p.city)+'&dt='+p.date+'&aqi=no')
+        .then(function(r){return r.json()}).then(function(data){
+          if(data&&data.forecast&&data.forecast.forecastday&&data.forecast.forecastday[0]){
+            var day=data.forecast.forecastday[0].day;
+            m._forecast={maxC:day.maxtemp_c,maxF:day.maxtemp_f,minC:day.mintemp_c,minF:day.mintemp_f,avgC:day.avgtemp_c,avgF:day.avgtemp_f,condition:day.condition?day.condition.text:'',rain:day.daily_chance_of_rain};
+            // Calculate implied probability
+            var t=p.threshold;var forecastVal=p.unit==='F'?day.maxtemp_f:day.maxtemp_c;
+            var stdDev=p.unit==='F'?4:2.2; // typical forecast error
+            if(p.op==='>='||p.op==='or higher'){
+              var z=(forecastVal-t)/stdDev;m._impliedProb=0.5*(1+erf(z/Math.sqrt(2)));
+            }else if(p.op==='<='||p.op==='or lower'){
+              var z=(t-forecastVal)/stdDev;m._impliedProb=0.5*(1+erf(z/Math.sqrt(2)));
+            }else if(p.op==='=='){
+              m._impliedProb=Math.exp(-Math.pow(forecastVal-t,2)/(2*stdDev*stdDev))/(stdDev*Math.sqrt(2*Math.PI))*
+                (p.unit==='F'?2:1); // probability density for exact temp (±1 degree)
+            }else if(p.op==='between'&&Array.isArray(t)){
+              var zLow=(t[0]-forecastVal)/stdDev;var zHigh=(t[1]-forecastVal)/stdDev;
+              m._impliedProb=0.5*(erf(zHigh/Math.sqrt(2))-erf(zLow/Math.sqrt(2)));
+            }
+            if(m._impliedProb!==undefined){
+              m._edge=(m._impliedProb-m._yesPrice)*100;
+            }
+          }
+        }).catch(function(){});
+    });
+    await Promise.all(forecastProms);
+  }else{
+    // Without API key, show markets without edge calculation
+    _wxMarkets.forEach(function(m){m._edge=null;m._forecast=null;});
+  }
+  wxRender();
+  lg('Found '+_wxMarkets.length+' weather markets','ok');
+}
+
+function erf(x){var t=1/(1+0.3275911*Math.abs(x));var y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return x>=0?y:-y;}
+
+function wxRender(){
+  var threshold=parseFloat($('wx-threshold').value)||8;
+  var signals=_wxMarkets.filter(function(m){return m._edge!==null&&m._edge>threshold});
+
+  $('wx-total').textContent=_wxMarkets.length;
+  $('wx-signals').textContent=signals.length;
+  $('wx-badge').textContent=signals.length||_wxMarkets.length;
+  var edges=_wxMarkets.filter(function(m){return m._edge!==null}).map(function(m){return m._edge});
+  $('wx-edge').textContent=edges.length?(edges.reduce(function(a,b){return a+b},0)/edges.length).toFixed(1)+'%':'--';
+  var wxTotal=_acc.weather.wins+_acc.weather.losses;
+  $('wx-acc').textContent=wxTotal>0?Math.round(_acc.weather.wins/wxTotal*100)+'%':'--';
+  $('wx-count').textContent=_wxMarkets.length;
+
+  var sorted=_wxMarkets.slice().sort(function(a,b){return(b._edge||0)-(a._edge||0)});
+  var html='';
+  sorted.forEach(function(m){
+    var p=m._parsed;
+    var edgeCls=m._edge!==null?(m._edge>8?'su':m._edge>0?'sn':'sd'):'sn';
+    var slug=m.slug||'';
+    var url='https://polymarket.com/event/'+slug;
+
+    html+='<div class="card '+edgeCls+'"><div class="card-hdr">'+
+      '<span style="font-weight:800;font-size:12px">'+(p.city||'Unknown')+'</span>'+
+      '<span style="display:flex;gap:8px;align-items:center">'+
+      '<a href="'+url+'" target="_blank" class="link">Trade &rarr;</a>'+
+      '<span class="chip '+(m._liq>500?'accent':'nt')+'" style="font-size:8px">$'+Math.round(m._liq)+' liq</span></span></div>'+
+      '<div class="card-body">'+
+      '<div style="font-size:10px;color:var(--t2);margin-bottom:8px">'+(m.question||'').slice(0,80)+'</div>'+
+      '<div class="row"><span class="label">YES PRICE</span><span class="value" style="color:var(--up)">$'+m._yesPrice.toFixed(3)+'</span></div>'+
+      '<div class="row"><span class="label">NO PRICE</span><span class="value" style="color:var(--dn)">$'+m._noPrice.toFixed(3)+'</span></div>'+
+      '<div class="row"><span class="label">TARGET</span><span class="value">'+(Array.isArray(p.threshold)?p.threshold[0]+'-'+p.threshold[1]:p.threshold)+'°'+(p.unit||'?')+' '+(p.op||'')+'</span></div>'+
+      '<div class="row"><span class="label">DATE</span><span class="value">'+(p.date||'?')+'</span></div>';
+
+    if(m._forecast){
+      html+='<div class="forecast">'+
+        '<div class="row"><span class="label">FORECAST HIGH</span><span class="value" style="color:var(--accent)">'+
+        (p.unit==='F'?m._forecast.maxF+'°F':m._forecast.maxC+'°C')+'</span></div>'+
+        '<div class="row"><span class="label">CONDITION</span><span class="value">'+m._forecast.condition+'</span></div>'+
+        '<div class="row"><span class="label">IMPLIED PROB</span><span class="value" style="color:var(--accent2)">'+(m._impliedProb!==undefined?(m._impliedProb*100).toFixed(1)+'%':'--')+'</span></div>'+
+        '<div class="row"><span class="label">EDGE</span><span class="value" style="color:'+(m._edge>8?'var(--up)':m._edge>0?'var(--nt)':'var(--dn)')+'">'+
+        (m._edge!==null?fmtPct(m._edge):'--')+'</span></div>'+
+        '<div class="edge-bar"><div class="edge-fill '+(m._edge>0?'positive':'negative')+'" style="width:'+Math.min(Math.abs(m._edge||0)*3,100)+'%"></div></div>'+
+        '</div>';
+    }else{
+      html+='<div style="margin-top:8px;padding:6px 8px;background:var(--bg2);border-radius:var(--radius-sm);font-size:9px;color:var(--t3)">'+
+        'Add WeatherAPI.com key to see forecast & edge calculation</div>';
+    }
+    html+='</div></div>';
+  });
+  $('wx-grid').innerHTML=html||'<div class="empty">No weather markets found.</div>';
+}
+
+$('wx-refresh').addEventListener('click',function(){wxScan()});
+$('wx-threshold').addEventListener('change',function(){wxRender()});
+
+// ═══════════════════════════════════════════════════════════
+// FEATURE 3: ARBITRAGE & STRADDLE SCANNER
+// ═══════════════════════════════════════════════════════════
+var _arbOpps=[];var _strOpps=[];var _arbScans=0;
+
+async function arbScan(){
+  lg('Scanning for arbitrage opportunities...');
+  _arbScans++;
+  var allMarkets=[];
+  for(var off=0;off<1000;off+=100){
+    try{
+      var r=await fetch(_GAMMA+'/markets?limit=100&active=true&closed=false&offset='+off+'&order=liquidity&ascending=false');
+      var d=await r.json();if(!d.length)break;allMarkets=allMarkets.concat(d);
+    }catch(e){break;}
+  }
+  lg('Scanned '+allMarkets.length+' markets');
+
+  _arbOpps=[];_strOpps=[];
+  var FEE=0.02; // ~2% round-trip fees
+
+  allMarkets.forEach(function(m){
+    var prices=JSON.parse(m.outcomePrices||'[]');
+    if(prices.length<2)return;
+    var yes=parseFloat(prices[0]);var no=parseFloat(prices[1]);
+    var liq=parseFloat(m.liquidity||'0');
+    var total=yes+no;
+
+    // Same-market arb: YES+NO < 1.00 (minus fees)
+    var costBoth=yes+no+FEE;
+    if(costBoth<1.0){
+      var profit=1.0-costBoth;
+      _arbOpps.push({question:m.question||'?',slug:m.slug||'',yes:yes,no:no,total:total,profit:profit,profitPct:profit/(yes+no)*100,liq:liq,eventSlug:m.eventSlug||m.slug});
+    }
+
+    // Straddle: one side is 55-80¢, buy 80% main + 20% hedge
+    if(yes>=0.55&&yes<=0.80&&liq>100){
+      var mainCost=0.8*yes;var hedgeCost=0.2*no;var totalCost=mainCost+hedgeCost+FEE/2;
+      var winPayout=0.8*1.0; // main wins
+      var losePayout=0.2*1.0; // hedge wins
+      var ev=yes*winPayout+(1-yes)*losePayout-totalCost;
+      if(ev>0.01)_strOpps.push({question:m.question||'?',slug:m.slug||'',yes:yes,no:no,mainSide:'YES',ev:ev,evPct:ev/totalCost*100,cost:totalCost,liq:liq,eventSlug:m.eventSlug||m.slug});
+    }
+    if(no>=0.55&&no<=0.80&&liq>100){
+      var mainCost2=0.8*no;var hedgeCost2=0.2*yes;var totalCost2=mainCost2+hedgeCost2+FEE/2;
+      var winPayout2=0.8*1.0;var losePayout2=0.2*1.0;
+      var ev2=no*winPayout2+(1-no)*losePayout2-totalCost2;
+      if(ev2>0.01)_strOpps.push({question:m.question||'?',slug:m.slug||'',yes:yes,no:no,mainSide:'NO',ev:ev2,evPct:ev2/totalCost2*100,cost:totalCost2,liq:liq,eventSlug:m.eventSlug||m.slug});
+    }
+  });
+
+  // Sort
+  var sortBy=$('arb-sort').value;
+  if(sortBy==='edge'){
+    _arbOpps.sort(function(a,b){return b.profitPct-a.profitPct});
+    _strOpps.sort(function(a,b){return b.evPct-a.evPct});
+  }else{
+    _arbOpps.sort(function(a,b){return b.liq-a.liq});
+    _strOpps.sort(function(a,b){return b.liq-a.liq});
+  }
+  arbRender();
+  lg('Found '+_arbOpps.length+' arb + '+_strOpps.length+' straddle opportunities','ok');
+}
+
+function arbRender(){
+  $('arb-scanned').textContent=_arbScans>0?(_arbOpps.length+_strOpps.length>0?'Active':'Done'):'--';
+  $('arb-opps').textContent=_arbOpps.length;
+  $('arb-straddles').textContent=_strOpps.length;
+  $('arb-best').textContent=_arbOpps.length>0?fmtPct(_arbOpps[0].profitPct):(_strOpps.length?fmtPct(_strOpps[0].evPct):'--');
+  $('arb-scans').textContent=_arbScans;
+  $('arb-badge').textContent=_arbOpps.length+_strOpps.length;
+  $('arb-count').textContent=_arbOpps.length;
+  $('str-count').textContent=_strOpps.length;
+
+  // Arb cards
+  var arbHtml='';
+  _arbOpps.slice(0,20).forEach(function(a){
+    var url='https://polymarket.com/event/'+(a.eventSlug||a.slug);
+    arbHtml+='<div class="card su"><div class="card-hdr">'+
+      '<span style="font-weight:700;font-size:11px">GUARANTEED PROFIT</span>'+
+      '<a href="'+url+'" target="_blank" class="link">Trade &rarr;</a></div>'+
+      '<div class="card-body">'+
+      '<div style="font-size:10px;color:var(--t2);margin-bottom:8px">'+a.question.slice(0,70)+'</div>'+
+      '<div class="row"><span class="label">BUY YES</span><span class="value" style="color:var(--up)">$'+a.yes.toFixed(4)+'</span></div>'+
+      '<div class="row"><span class="label">BUY NO</span><span class="value" style="color:var(--dn)">$'+a.no.toFixed(4)+'</span></div>'+
+      '<div class="row"><span class="label">TOTAL COST</span><span class="value">$'+(a.yes+a.no).toFixed(4)+'</span></div>'+
+      '<div class="row"><span class="label">GUARANTEED PAYOUT</span><span class="value" style="color:var(--up)">$1.00</span></div>'+
+      '<div style="margin-top:8px;text-align:center"><div class="arb-profit">'+fmtPct(a.profitPct)+' profit</div>'+
+      '<div class="arb-guaranteed">RISK-FREE (after ~2% fees)</div>'+
+      '<div style="font-size:9px;color:var(--t3);margin-top:4px">Liquidity: '+fmtUSD(a.liq)+'</div></div>'+
+      '</div></div>';
+  });
+  $('arb-grid').innerHTML=arbHtml||'<div class="empty">No same-market arbitrage found. Markets are efficiently priced.</div>';
+
+  // Straddle cards
+  var strHtml='';
+  _strOpps.slice(0,20).forEach(function(s){
+    var url='https://polymarket.com/event/'+(s.eventSlug||s.slug);
+    strHtml+='<div class="card sg"><div class="card-hdr">'+
+      '<span style="font-weight:700;font-size:11px">STRADDLE (80/20 '+s.mainSide+')</span>'+
+      '<a href="'+url+'" target="_blank" class="link">Trade &rarr;</a></div>'+
+      '<div class="card-body">'+
+      '<div style="font-size:10px;color:var(--t2);margin-bottom:8px">'+s.question.slice(0,70)+'</div>'+
+      '<div class="row"><span class="label">YES</span><span class="value" style="color:var(--up)">$'+s.yes.toFixed(3)+'</span></div>'+
+      '<div class="row"><span class="label">NO</span><span class="value" style="color:var(--dn)">$'+s.no.toFixed(3)+'</span></div>'+
+      '<div class="row"><span class="label">STRATEGY</span><span class="value">80% '+s.mainSide+' + 20% hedge</span></div>'+
+      '<div class="row"><span class="label">TOTAL COST</span><span class="value">$'+s.cost.toFixed(3)+'</span></div>'+
+      '<div class="row"><span class="label">EXPECTED VALUE</span><span class="value" style="color:var(--up)">'+fmtPct(s.evPct)+'</span></div>'+
+      '<div style="font-size:9px;color:var(--t3);margin-top:4px">Liquidity: '+fmtUSD(s.liq)+'</div>'+
+      '</div></div>';
+  });
+  $('str-grid').innerHTML=strHtml||'<div class="empty">No straddle opportunities found above EV threshold.</div>';
+}
+
+$('arb-refresh').addEventListener('click',function(){arbScan()});
+$('arb-sort').addEventListener('change',function(){arbRender()});
+
+// ═══════════════════════════════════════════════════════════
+// FEATURE 4: CRYPTO 5-MINUTE (SIMPLIFIED FROM v5)
+// ═══════════════════════════════════════════════════════════
+var _crMkts=[];var _crPreds={};var _crScans=0;
+
+function calcEMA(data,period){var k=2/(period+1);var ema=[data[0]];for(var i=1;i<data.length;i++)ema.push(data[i]*k+ema[i-1]*(1-k));return ema;}
+function calcRSI(data,period){var gains=[],losses=[];for(var i=1;i<data.length;i++){var df=data[i]-data[i-1];gains.push(df>0?df:0);losses.push(df<0?-df:0);}if(gains.length<period)return[];var ag=0,al=0;for(var i=0;i<period;i++){ag+=gains[i];al+=losses[i];}ag/=period;al/=period;var rsi=[100-100/(1+ag/(al||0.0001))];for(var i=period;i<gains.length;i++){ag=(ag*(period-1)+gains[i])/period;al=(al*(period-1)+losses[i])/period;rsi.push(100-100/(1+ag/(al||0.0001)));}return rsi;}
+
+async function crScan(){
+  lg('Scanning 5-min crypto markets...');
+  _crScans++;
+  var now=Math.floor(Date.now()/1000);var ts=Math.ceil(now/300)*300;
+  var assets=['btc','eth','sol','xrp'];var markets=[];
+  var assetFilter=$('cr-asset').value;
+  var fetches=assets.map(function(a){
+    return fetch(_GAMMA+'/events/slug/'+a+'-updown-5m-'+ts).then(function(r){return r.ok?r.json():null}).then(function(ev){
+      if(ev&&ev.markets&&ev.markets[0]&&!ev.markets[0].closed){
+        var m=ev.markets[0];m._asset=a.toUpperCase();m._windowTs=ts;m._endMs=ts*1000;m._eventSlug=ev.slug||a+'-updown-5m-'+ts;m.question=m.question||ev.title;markets.push(m);}
+    }).catch(function(){});
+  });
+  await Promise.all(fetches);
+
+  // Quick analysis per market
+  for(var i=0;i<markets.length;i++){
+    var m=markets[i];var tids=JSON.parse(m.clobTokenIds||'[]');
+    if(!tids[0]){m._analysis={score:0,dir:'neutral',sigs:0};continue;}
+    try{
+      var cbPair=m._asset==='XRP'?'XRP-USD':m._asset+'-USD';
+      var r=await Promise.all([
+        fetch(''+_CLOB+'/price?token_id='+tids[0]+'&side=buy').then(function(x){return x.json()}).catch(function(){return null}),
+        fetch(''+_CLOB+'/price?token_id='+tids[1]+'&side=buy').then(function(x){return x.json()}).catch(function(){return null}),
+        fetch(''+_CLOB+'/midpoint?token_id='+tids[0]).then(function(x){return x.json()}).catch(function(){return null}),
+        fetch(''+_COINBASE+'/v2/prices/'+cbPair+'/spot').then(function(x){return x.json()}).catch(function(){return null}),
+        fetch(''+_EXCHANGE+'/products/'+cbPair+'/candles?granularity=300').then(function(x){return x.json()}).catch(function(){return null})
+      ]);
+      var yP=parseFloat((r[0]&&r[0].price)||'0.5');var nP=parseFloat((r[1]&&r[1].price)||'0.5');
+      var mid=parseFloat((r[2]&&r[2].mid)||'0.5');
+      var spot=r[3]&&r[3].data?parseFloat(r[3].data.amount):null;
+      var candles=r[4]&&Array.isArray(r[4])?r[4].slice(0,20):null;
+      var score=0;var sigCount=0;
+      // Price signal
+      var dev=yP-0.5;if(Math.abs(dev)>0.003){score+=dev*80;sigCount++;}
+      // Midpoint
+      var mDev=mid-0.5;if(Math.abs(mDev)>0.003){score+=mDev*40;sigCount++;}
+      // Candle direction
+      if(candles&&candles.length>=2){
+        var pct=((candles[0][4]-candles[0][3])/candles[0][3])*100;
+        if(Math.abs(pct)>0.01){score+=pct>0?10:-10;sigCount++;}
+        // RSI
+        var closes=candles.slice().reverse().map(function(c){return c[4]});
+        if(closes.length>=16){var rsi=calcRSI(closes,14);if(rsi.length){var rv=rsi[rsi.length-1];if(rv<30){score+=8;sigCount++;}else if(rv>70){score-=8;sigCount++;}}}
+        // EMA cross
+        if(closes.length>=22){var e9=calcEMA(closes,9);var e21=calcEMA(closes,21);if(e9[e9.length-1]>e21[e21.length-1]){score+=6;sigCount++;}else{score-=6;sigCount++;}}
+      }
+      var dir=score>3?'up':score<-3?'down':'neutral';
+      m._analysis={score:Math.round(score*10)/10,dir:dir,sigs:sigCount,yP:yP,nP:nP,spot:spot};
+      _crPreds[m._asset]={dir:dir,score:score,windowTs:ts};
+    }catch(e){m._analysis={score:0,dir:'neutral',sigs:0};}
+  }
+  _crMkts=markets;crRender();
+  lg('Crypto: '+markets.length+' markets, '+_crScans+' scans','ok');
+}
+
+function crRender(){
+  var f=_crMkts.slice();
+  var filter=$('cr-asset').value;
+  if(filter!=='ALL')f=f.filter(function(m){return m._asset===filter});
+  $('cr-act').textContent=f.length;
+  $('cr-str').textContent=f.filter(function(m){return m._analysis&&Math.abs(m._analysis.score)>5}).length;
+  $('cr-badge').textContent=f.length;
+  var crT=_acc.crypto.wins+_acc.crypto.losses;
+  $('cr-acc').textContent=crT>0?Math.round(_acc.crypto.wins/crT*100)+'%':'--';
+  var endMs=f[0]?f[0]._endMs:0;
+  if(endMs){var df=endMs-Date.now();var s=Math.max(0,Math.floor(df/1000));$('cr-win').textContent=Math.floor(s/60)+'m '+(s%60)+'s';}
+
+  var html='';
+  f.forEach(function(m){
+    var a=m._analysis||{};var d=a.dir||'neutral';
+    var cls=d==='up'?'su':d==='down'?'sd':'sn';var dc=d==='up'?'up':d==='down'?'dn':'nt';
+    var arrow=d==='up'?'\u25B2':d==='down'?'\u25BC':'\u25CF';
+    var url='https://polymarket.com/event/'+(m._eventSlug||'');
+    html+='<div class="card '+cls+'"><div class="card-hdr">'+
+      '<span style="font-weight:800;font-size:14px;letter-spacing:1px">'+m._asset+' <span class="chip accent" style="font-size:8px">5M</span></span>'+
+      '<span style="display:flex;gap:8px;align-items:center"><a href="'+url+'" target="_blank" class="link">Trade &rarr;</a></span></div>'+
+      '<div class="card-body">'+
+      '<div style="font-size:10px;color:var(--t2);margin-bottom:8px">'+(m.question||'').slice(0,60)+'</div>'+
+      '<div class="row"><span class="label">UP (YES)</span><span class="value" style="color:var(--up)">$'+(a.yP||0.5).toFixed(3)+'</span></div>'+
+      '<div class="row"><span class="label">DOWN (NO)</span><span class="value" style="color:var(--dn)">$'+(a.nP||0.5).toFixed(3)+'</span></div>'+
+      (a.spot?'<div class="row"><span class="label">'+m._asset+' SPOT</span><span class="value" style="color:var(--accent)">$'+a.spot.toFixed(2)+'</span></div>':'')+
+      '<div style="margin-top:8px;display:flex;align-items:center;gap:10px">'+
+      '<span class="chip '+dc+'">'+arrow+' '+d.toUpperCase()+'</span>'+
+      '<span style="font-size:16px;font-weight:800;color:var(--'+dc+')">'+(a.score>0?'+':'')+a.score+'</span>'+
+      '<span style="font-size:9px;color:var(--t3)">'+a.sigs+' signals</span></div>'+
+      '</div></div>';
+  });
+  $('cr-grid').innerHTML=html||'<div class="empty">No active 5-min markets found.</div>';
+}
+
+$('cr-refresh').addEventListener('click',function(){crScan()});
+$('cr-asset').addEventListener('change',function(){crRender()});
+
+// 1-second countdown for crypto timer
+setInterval(function(){
+  if(!_crMkts.length)return;
+  var endMs=_crMkts[0]._endMs||0;if(!endMs)return;
+  var df=endMs-Date.now();if(df<=0){crScan();return;}
+  var s=Math.floor(df/1000);$('cr-win').textContent=Math.floor(s/60)+'m '+(s%60)+'s';
+},1000);
+
+// ═══════════════════════════════════════════════════════════
+// ACCURACY DASHBOARD
+// ═══════════════════════════════════════════════════════════
+function accRender(){
+  var features=[
+    {name:'Smart Money',key:'smartMoney',target:60,color:'var(--gold)'},
+    {name:'Weather',key:'weather',target:70,color:'var(--accent2)'},
+    {name:'Arbitrage',key:'arb',target:95,color:'var(--up)'},
+    {name:'Crypto 5M',key:'crypto',target:55,color:'var(--accent)'}
+  ];
+  var html='';
+  features.forEach(function(f){
+    var a=_acc[f.key];var total=a.wins+a.losses;var pct=total>0?Math.round(a.wins/total*100):0;
+    var cls=total<10?'nt':pct>=f.target?'up':pct>=50?'nt':'dn';
+    html+='<div class="acc-card" style="border-top:3px solid '+f.color+'">'+
+      '<div style="font-size:9px;letter-spacing:1.5px;color:var(--t3);font-weight:600">'+f.name.toUpperCase()+'</div>'+
+      '<div class="acc-pct" style="color:var(--'+cls+')">'+pct+'%</div>'+
+      '<div class="acc-label">TARGET: '+f.target+'%</div>'+
+      '<div class="acc-detail">'+a.wins+'W / '+a.losses+'L'+(a.pending?' / '+a.pending+'P':'')+' ('+total+' total)</div>'+
+      (total<10?'<div style="font-size:8px;color:var(--nt);margin-top:4px">Need '+(10-total)+' more trades for reliable data</div>':'')+
+      '</div>';
+  });
+  $('acc-panel').innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════════════
+// STARTUP
+// ═══════════════════════════════════════════════════════════
+lg('PolyBot v6.0 \u2014 Multi-Strategy: Smart Money + Weather + Arbitrage + Crypto');
+lg(_onPoly?'Mode: Direct (polymarket.com)':'Mode: Proxy ('+location.hostname+')');
+$('stxt').textContent='PolyBot v6.0 \u2014 Multi-Strategy';
+
+// Auto-load smart money on start
+smFetchTrades();
+// Auto-scan crypto
+crScan();
+// Render accuracy
+accRender();
+// Auto-refresh crypto every 30s
+setInterval(crScan,30000);
+// Refresh accuracy every 10s
+setInterval(accRender,10000);
+
+</script>
+</body>
+</html>
