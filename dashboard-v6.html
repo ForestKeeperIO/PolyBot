@@ -363,7 +363,17 @@ function lg(msg,type){var el=$('log');if(!el)return;var t=new Date().toLocaleTim
 function fmtUSD(n){if(n===undefined||n===null||isNaN(n))return'--';return n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1000?'$'+(n/1000).toFixed(1)+'K':'$'+n.toFixed(2)}
 function fmtPct(n){return(n>0?'+':'')+n.toFixed(1)+'%'}
 function timeAgo(ts){var d=Math.floor((Date.now()/1000-ts)/60);return d<1?'now':d<60?d+'m':d<1440?Math.floor(d/60)+'h':Math.floor(d/1440)+'d'}
-function polyUrl(m){var slug=m.eventSlug||m.slug||m.conditionId||'';return slug?'https://polymarket.com/event/'+slug:'https://polymarket.com'}
+// conditionId→eventSlug lookup (built during live market loading)
+var _cidToSlug={};
+function polyUrl(m){
+  // Prefer _eventSlug (extracted from Gamma events array), then eventSlug (Data API), then slug
+  var slug=m._eventSlug||m.eventSlug||'';
+  // If still empty, try slug but NOT conditionId (conditionId is a hex hash, not a valid URL)
+  if(!slug)slug=m.slug||'';
+  // Last resort: look up conditionId in our mapping
+  if(!slug&&m.conditionId&&_cidToSlug[m.conditionId])slug=_cidToSlug[m.conditionId];
+  return slug?'https://polymarket.com/event/'+slug:'https://polymarket.com';
+}
 
 // ── Page Navigation ──
 var _pageConfig={
@@ -405,14 +415,23 @@ async function smLoadLiveMarkets(){
       var r=await fetch(_GAMMA+'/markets?limit=100&active=true&closed=false&offset='+off+'&order=liquidity&ascending=false');
       var d=await r.json();if(!d||!d.length)break;
       d.forEach(function(m){
-        var s=m.eventSlug||m.slug||m.conditionId;if(s)slugs[s]=true;
-        if(m.conditionId)slugs[m.conditionId]=true;
-        if(m.slug)slugs[m.slug]=true;
+        // Extract the correct event slug from the events array
+        var evSlug=(m.events&&m.events[0])?m.events[0].slug:'';
+        var mSlug=m.slug||'';
+        var cid=m.conditionId||'';
+        // Index all identifiers as live
+        if(evSlug)slugs[evSlug]=true;
+        if(mSlug)slugs[mSlug]=true;
+        if(cid)slugs[cid]=true;
+        // Build conditionId → eventSlug lookup for URL resolution
+        if(cid&&evSlug)_cidToSlug[cid]=evSlug;
+        // Also map market slug → event slug
+        if(mSlug&&evSlug&&mSlug!==evSlug)_cidToSlug[mSlug]=evSlug;
       });
     }catch(e){break;}
   }
   _liveMarketSlugs=slugs;
-  lg('Indexed '+Object.keys(slugs).length+' live markets','ok');
+  lg('Indexed '+Object.keys(slugs).length+' live markets, '+Object.keys(_cidToSlug).length+' slug mappings','ok');
 }
 
 function isLiveMarket(tr){
@@ -482,7 +501,9 @@ async function smFetchTrades(){
   _smConsensus={};
   allTrades.forEach(function(tr){
     var key=tr.eventSlug||tr.slug||tr.conditionId;if(!key)return;
-    if(!_smConsensus[key])_smConsensus[key]={title:tr.title||'Unknown',buys:0,sells:0,totalSize:0,traders:[],slug:key};
+    // For the URL slug, prefer eventSlug (Data API gives correct event slug), fall back to slug, then lookup conditionId
+    var urlSlug=tr.eventSlug||tr.slug||(tr.conditionId&&_cidToSlug[tr.conditionId])||'';
+    if(!_smConsensus[key])_smConsensus[key]={title:tr.title||'Unknown',buys:0,sells:0,totalSize:0,traders:[],slug:urlSlug};
     if(tr.side==='BUY')_smConsensus[key].buys++;else _smConsensus[key].sells++;
     _smConsensus[key].totalSize+=parseFloat(tr.size||0);
     var tName=tr._trader?tr._trader.name:'anon';
@@ -515,7 +536,7 @@ function smRender(){
   var ch='';
   consArr.slice(0,12).forEach(function(c){
     var cls=c.buys>c.sells?'up':c.sells>c.buys?'dn':'warn';
-    var url='https://polymarket.com/event/'+c.slug;
+    var url=polyUrl({_eventSlug:c.slug,eventSlug:c.slug});
     var buySignal=c.buys>c.sells?'BUY YES':'BUY NO';var ratio=Math.max(c.buys,c.sells)/(c.buys+c.sells)*100;
     ch+='<div class="consensus-card"><div class="consensus-title"><a href="'+url+'" target="_blank">'+c.title.slice(0,55)+'</a></div>'+
       '<div class="consensus-meta"><span class="chip '+cls+'">'+c.traders.length+' whales \u2192 '+buySignal+' ('+Math.round(ratio)+'%)</span>'+
@@ -572,6 +593,8 @@ async function wxScan(){
     m._parsed=wxParseQuestion(m.question||'');
     var prices=JSON.parse(m.outcomePrices||'[]');
     m._yesPrice=parseFloat(prices[0]||'0.5');m._noPrice=parseFloat(prices[1]||'0.5');m._liq=parseFloat(m.liquidity||'0');
+    // Extract correct event slug from Gamma API events array
+    m._eventSlug=(m.events&&m.events[0])?m.events[0].slug:(m.eventSlug||m.slug||'');
   });
   var apiKey=$('wx-apikey').value.trim();
   if(apiKey){
@@ -669,18 +692,20 @@ async function arbScan(){
   allMarkets.forEach(function(m){
     var prices=JSON.parse(m.outcomePrices||'[]');if(prices.length<2)return;
     var yes=parseFloat(prices[0]);var no=parseFloat(prices[1]);var liq=parseFloat(m.liquidity||'0');
+    // Extract correct event slug from Gamma API events array
+    var evSlug=(m.events&&m.events[0])?m.events[0].slug:(m.eventSlug||m.slug||'');
     var costBoth=yes+no+FEE;
     if(costBoth<1.0){
       var profit=1.0-costBoth;
-      _arbOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:m.eventSlug||m.slug||'',yes:yes,no:no,profit:profit,profitPct:profit/(yes+no)*100,liq:liq});
+      _arbOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:evSlug,_eventSlug:evSlug,yes:yes,no:no,profit:profit,profitPct:profit/(yes+no)*100,liq:liq});
     }
     if(yes>=0.55&&yes<=0.80&&liq>100){
       var mc=0.8*yes,hc=0.2*no,tc=mc+hc+FEE/2;var ev=yes*0.8+(1-yes)*0.2-tc;
-      if(ev>0.01)_strOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:m.eventSlug||m.slug||'',yes:yes,no:no,mainSide:'YES',ev:ev,evPct:ev/tc*100,cost:tc,liq:liq});
+      if(ev>0.01)_strOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:evSlug,_eventSlug:evSlug,yes:yes,no:no,mainSide:'YES',ev:ev,evPct:ev/tc*100,cost:tc,liq:liq});
     }
     if(no>=0.55&&no<=0.80&&liq>100){
       var mc2=0.8*no,hc2=0.2*yes,tc2=mc2+hc2+FEE/2;var ev2=no*0.8+(1-no)*0.2-tc2;
-      if(ev2>0.01)_strOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:m.eventSlug||m.slug||'',yes:yes,no:no,mainSide:'NO',ev:ev2,evPct:ev2/tc2*100,cost:tc2,liq:liq});
+      if(ev2>0.01)_strOpps.push({question:m.question||'?',slug:m.slug||'',eventSlug:evSlug,_eventSlug:evSlug,yes:yes,no:no,mainSide:'NO',ev:ev2,evPct:ev2/tc2*100,cost:tc2,liq:liq});
     }
   });
   var sortBy=$('arb-sort').value;
@@ -700,7 +725,7 @@ function arbRender(){
 
   var ah='';
   _arbOpps.slice(0,20).forEach(function(a){
-    var url='https://polymarket.com/event/'+(a.eventSlug||a.slug);
+    var url=polyUrl(a);
     ah+='<div class="market-card"><div class="card-top"><div class="card-question">'+a.question.slice(0,70)+'</div>'+
       '<a href="'+url+'" target="_blank" class="trade-link">Trade &rarr;</a></div>'+
       '<div class="card-body">'+
@@ -715,7 +740,7 @@ function arbRender(){
 
   var sh='';
   _strOpps.slice(0,20).forEach(function(s){
-    var url='https://polymarket.com/event/'+(s.eventSlug||s.slug);
+    var url=polyUrl(s);
     sh+='<div class="market-card"><div class="card-top"><div class="card-question">'+s.question.slice(0,70)+'</div>'+
       '<a href="'+url+'" target="_blank" class="trade-link">Trade &rarr;</a></div>'+
       '<div class="card-body">'+
